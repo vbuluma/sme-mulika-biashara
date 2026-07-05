@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>InverBrass — Mulika Biashara</title>
+<link rel="stylesheet" href="styles.css"/>
+
+</head>
+<body>
+
+<!-- LOGIN SCREEN -->
+<div class="login-wrap" id="login-screen">
+
+  <!-- ── MAIN LOGIN CARD ──────────────────────────────────────── -->
+  <div class="login-card" id="login-card">
+
+    <!-- Brand / Logo -->
+    <div class="login-brand-block" id="login-brand-area">
+      <div class="login-logo-ring">
+        <img id="login-logo-img" src="" alt="" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:inherit"/>
+        <span id="login-logo-fallback" style="font-size:28px;line-height:1">🚗</span>
+      </div>
+      <div id="login-business-name" class="login-biz-name">Mulika Biashara</div>
+      <div class="login-biz-tagline">Point of Sale &amp; Business Management</div>
+    </div>
+
+    <!-- Heading -->
+    <div class="login-heading-block">
+      <div class="login-heading">Welcome back</div>
+      <div class="login-subheading">Enter your username and PIN to continue</div>
+    </div>
+
+    <!-- Error (hidden until triggered) -->
+    <div class="login-error" id="login-error">Incorrect username or PIN</div>
+
+    <!-- Inputs -->
+    <div class="login-fields">
+      <div class="form-row">
+        <div class="form-label">Username</div>
+        <input class="form-input" id="login-username" type="text"
+          placeholder="e.g. james.k" autocomplete="username" spellcheck="false"
+          onkeydown="if(event.key==='Enter')document.getElementById('login-pin').focus()"/>
+      </div>
+      <div class="form-row" style="margin-bottom:4px">
+        <div class="form-label">PIN</div>
+        <div class="pin-input-wrap">
+          <input class="form-input pin-input" id="login-pin" type="password"
+            placeholder="• • • •" maxlength="4" inputmode="numeric"
+            autocomplete="current-password"
+            onkeydown="if(event.key==='Enter')attemptLogin()"/>
+          <button type="button" class="pin-show-btn" id="pin-toggle-btn"
+            onclick="togglePinVisibility('login-pin','pin-toggle-btn')"
+            aria-label="Show PIN">👁</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Primary action -->
+    <button class="btn-primary login-btn" id="login-btn" onclick="attemptLogin()">
+      Log in
+    </button>
+
+    <!-- Secondary links -->
+    <div class="login-links">
+      <span onclick="showRecovery()" class="login-link">Forgot PIN?</span>
+      <span class="login-link-sep">·</span>
+      <span onclick="showSignUp()" class="login-link">New business? Sign up</span>
+    </div>
+
+    <!-- Footer -->
+    <div class="login-footer-note">
+      Powered by <strong>InverBrass</strong> · Mulika Biashara
+      © <span id="login-footer-year"></span>
+    </div>
+  </div>
+
+  <!-- ── RECOVERY CARD ────────────────────────────────────────── -->
+  <div class="login-card" id="recovery-card" style="display:none">
+
+    <div class="login-brand-block">
+      <div class="login-logo-ring">
+        <img id="login-logo-img-2" src="" alt="" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:inherit"/>
+        <span id="login-logo-fallback-2" style="font-size:28px;line-height:1">🚗</span>
+      </div>
+      <div id="login-business-name-2" class="login-biz-name">Mulika Biashara</div>
+    </div>
+
+    <div class="login-heading-block">
+      <div class="login-heading">Recover access</div>
+      <div class="login-subheading" id="recovery-subheading">Step 1 of 3 — Enter your username</div>
+    </div>
+
+    <!-- Step progress dots -->
+    <div class="recovery-steps">
+      <div class="recovery-step-dot active" id="rdot-1"></div>
+      <div class="recovery-step-line"></div>
+      <div class="recovery-step-dot" id="rdot-2"></div>
+      <div class="recovery-step-line"></div>
+      <div class="recovery-step-dot" id="rdot-3"></div>
+    </div>
+
+    <div class="login-error" id="recovery-error">Incorrect answer</div>
+
+    <!-- Step 1: Username -->
+    <div id="recovery-step-1">
+      <div class="form-row">
+        <div class="form-label">Username</div>
+        <input class="form-input" id="recovery-username" type="text"
+          placeholder="e.g. james.k" autocomplete="username" spellcheck="false"
+          onkeydown="if(event.key==='Enter')fetchSecurityQuestion()"/>
+      </div>
+      <button class="btn-primary" id="recovery-step1-btn" onclick="fetchSecurityQuestion()">
+        Continue →
+      </button>
+    </div>
+
+    <!-- Step 2: Security question -->
+    <div id="recovery-step-2" style="display:none">
+      <div class="recovery-question-box" id="recovery-question-display"></div>
+      <div class="form-row">
+        <div class="form-label">Your answer</div>
+        <input class="form-input" id="recovery-answer" type="text"
+          placeholder="Type your answer…" autocomplete="off" spellcheck="false"
+          onkeydown="if(event.key==='Enter')verifySecurityAnswer()"/>
+      </div>
+      <button class="btn-primary" id="recovery-step2-btn" onclick="verifySecurityAnswer()">
+        Verify →
+      </button>
+    </div>
+
+    <!-- Step 3: New PIN -->
+    <div id="recovery-step-3" style="display:none">
+      <div class="recovery-success-note">✅ Identity verified — set your new PIN below</div>
+      <div class="form-row">
+        <div class="form-label">New PIN</div>
+        <div class="pin-input-wrap">
+          <input class="form-input pin-input" id="recovery-new-pin" type="password"
+            placeholder="• • • •" maxlength="4" inputmode="numeric"
+            onkeydown="if(event.key==='Enter')document.getElementById('recovery-confirm-pin').focus()"/>
+          <button type="button" class="pin-show-btn" id="recovery-pin-toggle"
+            onclick="togglePinVisibility('recovery-new-pin','recovery-pin-toggle')"
+            aria-label="Show PIN">👁</button>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-label">Confirm new PIN</div>
+        <div class="pin-input-wrap">
+          <input class="form-input pin-input" id="recovery-confirm-pin" type="password"
+            placeholder="• • • •" maxlength="4" inputmode="numeric"
+            onkeydown="if(event.key==='Enter')submitNewPin()"/>
+        </div>
+      </div>
+      <button class="btn-primary" id="recovery-step3-btn" onclick="submitNewPin()">
+        Save PIN &amp; Log in
+      </button>
+    </div>
+
+    <button class="btn-secondary" style="width:100%;margin-top:12px" onclick="hideRecovery()">
+      ← Back to login
+    </button>
+  </div>
+
+  <!-- ── SIGN UP CARD ──────────────────────────────────────────── -->
+  <div class="login-card" id="signup-card" style="display:none">
+
+    <div class="login-brand-block">
+      <div class="login-logo-ring">
+        <span style="font-size:28px;line-height:1">🏪</span>
+      </div>
+      <div class="login-biz-name">Register your business</div>
+      <div class="login-biz-tagline">Set up takes under 2 minutes</div>
+    </div>
+
+    <div class="login-error" id="signup-error">Please check your details</div>
+
+    <div class="form-row">
+      <div class="form-label">Business name</div>
+      <input class="form-input" id="signup-biz-name" type="text"
+        placeholder="e.g. Sparkle Car Wash" autocomplete="organization"/>
+    </div>
+    <div class="form-row">
+      <div class="form-label">Business type</div>
+      <select class="form-input" id="signup-vertical">
+        <option value="🚗">🚗 Car Wash</option>
+        <option value="✂️">✂️ Salon / Barber</option>
+        <option value="🍽️">🍽️ Restaurant / Café</option>
+        <option value="🏪">🏪 Retail Shop</option>
+        <option value="💊">💊 Pharmacy</option>
+        <option value="👕">👕 Laundry</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <div class="form-label">Your name</div>
+      <input class="form-input" id="signup-display-name" type="text"
+        placeholder="e.g. James Kariuki" autocomplete="name"/>
+    </div>
+    <div class="form-row">
+      <div class="form-label">Choose a username</div>
+      <input class="form-input" id="signup-username" type="text"
+        placeholder="e.g. james.k" autocomplete="username" spellcheck="false"
+        oninput="this.value=this.value.toLowerCase().replace(/\s/g,'.')"/>
+    </div>
+    <div class="form-row">
+      <div class="form-label">Choose a 4-digit PIN</div>
+      <div class="pin-input-wrap">
+        <input class="form-input pin-input" id="signup-pin" type="password"
+          placeholder="• • • •" maxlength="4" inputmode="numeric"/>
+        <button type="button" class="pin-show-btn" id="signup-pin-toggle"
+          onclick="togglePinVisibility('signup-pin','signup-pin-toggle')"
+          aria-label="Show PIN">👁</button>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-label">Security question</div>
+      <select class="form-input" id="signup-security-question">
+        <option value="">— Select a question —</option>
+        <option>What was the name of your first shop or business?</option>
+        <option>What is your mother's home county or town?</option>
+        <option>Who is your favourite brother or sister?</option>
+        <option>Who is your favourite child?</option>
+        <option>What was your favourite subject in school?</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <div class="form-label">Your answer <span style="font-size:10px;color:var(--text3)">(remember this exactly)</span></div>
+      <input class="form-input" id="signup-security-answer" type="text"
+        placeholder="Your answer…" autocomplete="off" spellcheck="false"/>
+    </div>
+
+    <button class="btn-primary" id="signup-btn" onclick="submitSignUp()">
+      Create account
+    </button>
+    <div class="login-links">
+      <span onclick="hideSignUp()" class="login-link">← Back to login</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- MAIN APP -->
+<div id="app-root" style="display:none">
+<div class="app-shell">
+
+<!-- SIDEBAR (desktop) -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <img id="nav-logo-img" src="" alt="" class="sidebar-logo"/>
+    <span id="nav-logo-fallback" class="sidebar-fallback">🚗</span>
+    <div class="sidebar-biz">
+      <div class="sidebar-biz-name" id="nav-business-name">Sparkle Car Wash</div>
+      <div class="sidebar-biz-sub">Mulika Biashara</div>
+    </div>
+    <button class="sidebar-collapse-btn" onclick="toggleSidebar()" title="Collapse menu">◀</button>
+  </div>
+
+  <nav class="sidebar-nav" id="sidebar-nav">
+    <div class="nav-tab active" data-perm="pos"><span class="nav-icon">🧾</span><span class="nav-label">New Sale</span></div>
+    <div class="nav-tab" data-perm="log"><span class="nav-icon">📋</span><span class="nav-label">Reports</span></div>
+    <div class="nav-tab" data-perm="recon"><span class="nav-icon">⚖️</span><span class="nav-label">Reconcile</span></div>
+    <div class="nav-tab" data-perm="approvals" id="approvals-tab"><span class="nav-icon">🔐</span><span class="nav-label">Approvals</span><span class="pending-dot" id="pending-dot"></span></div>
+    <div class="nav-tab" data-perm="myreturns" id="myreturns-tab"><span class="nav-icon">↩️</span><span class="nav-label">My Returned Items</span><span class="pending-dot" id="myreturns-dot"></span></div>
+    <div class="nav-tab" data-perm="credit"><span class="nav-icon">📒</span><span class="nav-label">Credit</span><span class="pending-dot" id="credit-dot"></span></div>
+    <div class="nav-tab" data-perm="alerts" id="alerts-tab"><span class="nav-icon">🔔</span><span class="nav-label">Alerts</span><span class="pending-dot" id="alert-dot"></span></div>
+    <div class="nav-tab" data-perm="setup"><span class="nav-icon">⚙️</span><span class="nav-label">Setup</span></div>
+  </nav>
+
+  <div class="sidebar-footer">
+    <div class="sidebar-user">
+      <span style="font-size:20px">👤</span>
+      <div class="sidebar-user-info">
+        <div class="sidebar-user-name" id="current-user-name">—</div>
+        <div class="sidebar-user-role"><span class="pill pill-amber" id="current-user-role">Maker</span></div>
+      </div>
+    </div>
+    <button class="logout-btn" style="width:100%;text-align:center" onclick="logout()">Sign out</button>
+  </div>
+</aside>
+
+<!-- TOP BAR (desktop + mobile) -->
+<div class="topbar" id="topbar">
+  <!-- Mobile only: hamburger + brand -->
+  <button id="mob-menu-btn" onclick="toggleMobDrawer()" style="display:none;background:none;border:none;font-size:20px;cursor:pointer;padding:4px;color:var(--text);margin-right:8px">☰</button>
+  <div id="topbar-mobile-brand" style="display:none;font-size:14px;font-weight:700;color:var(--teal)">Sparkle Car Wash</div>
+
+  <span class="topbar-title" id="topbar-title">New Sale</span>
+  <div class="topbar-right">
+    <span id="db-status" class="badge-biz">🟡 Offline</span>
+    <button class="logout-btn" style="display:none" id="topbar-logout-mob" onclick="logout()">Logout</button>
+  </div>
+</div>
+
+<!-- MOBILE BOTTOM NAV -->
+<div class="mobile-bottom-nav" id="mobile-bottom-nav">
+  <div class="mob-tab active" data-perm="pos" onclick="showView('pos',this)"><span class="mob-icon">🧾</span>Sale</div>
+  <div class="mob-tab" data-perm="log" onclick="showView('log',this)"><span class="mob-icon">📋</span>Reports</div>
+  <div class="mob-tab" data-perm="recon" onclick="showView('recon',this)"><span class="mob-icon">⚖️</span>Reconcile</div>
+  <div class="mob-tab" data-perm="credit" onclick="showView('credit',this)"><span class="mob-icon">📒</span>Credit</div>
+  <div class="mob-tab" data-perm="__more__" onclick="toggleMobDrawer()"><span class="mob-icon">⋯</span>More</div>
+</div>
+
+<!-- MOBILE DRAWER (secondary tabs) -->
+<div class="mob-drawer-bg" id="mob-drawer-bg" onclick="toggleMobDrawer()"></div>
+<div class="mob-drawer" id="mob-drawer">
+  <div class="mob-drawer-title">More</div>
+  <div class="mob-drawer-item" data-perm="approvals" onclick="showViewMob('approvals')">🔐 <span>Approvals</span><span class="pending-dot" id="pending-dot-mob" style="position:relative;top:auto;right:auto;margin-left:6px"></span></div>
+  <div class="mob-drawer-item" data-perm="myreturns" onclick="showViewMob('myreturns')">↩️ <span>My Returned Items</span></div>
+  <div class="mob-drawer-item" data-perm="alerts" onclick="showViewMob('alerts')">🔔 <span>Alerts</span><span id="alert-dot-mob" style="display:none;width:8px;height:8px;background:var(--red);border-radius:50%;margin-left:6px;display:inline-block"></span></div>
+  <div class="mob-drawer-item" data-perm="setup" onclick="showViewMob('setup')">⚙️ <span>Setup</span></div>
+  <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border)">
+    <div style="font-size:12px;color:var(--text2);margin-bottom:6px">Signed in as <strong id="mob-user-name">—</strong></div>
+    <button class="logout-btn" style="width:100%;text-align:center" onclick="logout()">Sign out</button>
+  </div>
+</div>
+
+<!-- MAIN CONTENT AREA -->
+<div class="main-content" id="main-content">
+
+<!-- POS VIEW -->
+<div class="view active" id="view-pos">
+  <div id="pos-viewonly-banner" style="display:none;background:var(--purple-light);border:1px solid var(--purple);border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;color:var(--purple);margin-bottom:14px">👁️ View-only mode — as a Checker, you can see today's services and prices but cannot create a sale.</div>
+  <div class="pos-grid">
+    <div>
+      <div class="section-title">Services</div>
+      <div class="product-grid" id="product-grid"></div>
+      <div class="section-title" style="margin-top:4px">Add-ons</div>
+      <div class="product-grid" id="addon-grid"></div>
+    </div>
+    <div>
+      <div class="cart-panel">
+        <div class="cart-header">
+          <h3>Current sale</h3>
+          <button class="btn-secondary" onclick="clearCart()" style="font-size:11px;padding:4px 10px">Clear</button>
+        </div>
+
+        <div class="form-row">
+          <div class="form-label">Customer phone (optional, for receipts)</div>
+          <input class="form-input" id="cust-phone" placeholder="e.g. 0712345678" autocomplete="off" oninput="onPhoneInput(this.value)" onfocus="onPhoneInput(this.value)" onblur="validatePhoneFieldLive(); setTimeout(()=>hideAutocomplete('phone-autocomplete'),150)"/>
+          <div class="autocomplete-list" id="phone-autocomplete"></div>
+          <div class="field-error" id="cust-phone-error">Enter a valid Kenyan number, e.g. 0712345678</div>
+        </div>
+        <div class="form-row" id="cust-name-row" style="position:relative">
+          <div class="form-label">Customer name (optional)</div>
+          <input class="form-input" id="cust-name" placeholder="e.g. Susan Wanjiru" autocomplete="off" oninput="onNameInput(this.value)" onfocus="onNameInput(this.value)" onblur="setTimeout(()=>hideAutocomplete('name-autocomplete'),150)"/>
+          <div class="autocomplete-list" id="name-autocomplete"></div>
+        </div>
+
+        <div class="section-title" style="margin-top:4px">Items Purchased</div>
+        <div id="cart-items"><div class="cart-empty">Tap a service to add it</div></div>
+        <div id="cart-total-row" style="display:none">
+          <div class="cart-total"><span>Total</span><span id="cart-total">KES 0</span></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0 8px">
+            <div style="position:relative">
+              <div class="form-label" id="plate-field-label">Plate number <span class="req">*</span></div>
+              <input class="form-input" id="plate-num" placeholder="e.g. KBZ 123A" autocomplete="off" style="text-transform:uppercase" oninput="onPlateInput(this.value)" onfocus="onPlateInput(this.value)" onblur="setTimeout(()=>hideAutocomplete('plate-autocomplete'),150)"/>
+              <div class="autocomplete-list" id="plate-autocomplete"></div>
+              <div class="field-error" id="plate-error">Plate number is required</div>
+            </div>
+            <div style="position:relative">
+              <div class="form-label">Staff / Attendant <span class="req">*</span></div>
+              <input class="form-input" id="staff-name" placeholder="Type to search..." autocomplete="off" oninput="onStaffInput(this.value)" onfocus="onStaffInput(this.value)" onblur="setTimeout(()=>hideAutocomplete('staff-autocomplete'),150)"/>
+              <div class="autocomplete-list" id="staff-autocomplete"></div>
+              <div class="field-error" id="staff-error">Please select a staff member</div>
+            </div>
+          </div>
+          <div id="loyalty-area"></div>
+
+          <div id="payment-section">
+            <div class="form-label">Payment <span class="req">*</span></div>
+            <div class="mode-toggle">
+              <div class="mode-opt selected" id="mode-single" onclick="setPaymentMode('single')">Single method</div>
+              <div class="mode-opt" id="mode-split" onclick="setPaymentMode('split')">Split payment</div>
+            </div>
+            <div id="single-payment">
+              <div class="payment-opts" id="payment-opts">
+                <div class="pay-opt selected" data-method="M-Pesa" onclick="selectPayment(this)"><span class="pay-icon">📱</span>M-Pesa</div>
+                <div class="pay-opt" data-method="Cash" onclick="selectPayment(this)"><span class="pay-icon">💵</span>Cash</div>
+                <div class="pay-opt" data-method="Card" onclick="selectPayment(this)"><span class="pay-icon">💳</span>Card</div>
+                <div class="pay-opt" data-method="Credit" onclick="selectPayment(this)"><span class="pay-icon">📝</span>Credit</div>
+              </div>
+            </div>
+            <div id="split-payment" style="display:none">
+              <div id="split-rows"></div>
+              <button class="btn-secondary" style="width:100%;font-size:12px;margin-bottom:8px" onclick="addSplitRow()">+ Add another payment method</button>
+              <div class="split-remaining" id="split-remaining"></div>
+            </div>
+          </div>
+
+          <button class="btn-primary" id="charge-btn" onclick="recordSale()">Charge KES 0</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="footer" id="footer-pos"></div>
+</div>
+
+<!-- LOG VIEW -->
+<div class="view" id="view-log">
+  <div style="font-size:16px;font-weight:600;margin-bottom:4px">Reports</div>
+  <div style="font-size:13px;color:var(--text2);margin-bottom:16px">View today's sales, or build a custom report with just the fields you need.</div>
+
+  <div class="tab-bar">
+    <div class="tab-item active" id="reports-tab-sales" onclick="switchReportsTab('sales',this)">Sales Report</div>
+    <div class="tab-item" id="reports-tab-staff" onclick="switchReportsTab('staff',this)">Staff Sales Report</div>
+    <div class="tab-item" id="reports-tab-custom" onclick="switchReportsTab('custom',this)">Custom Report</div>
+  </div>
+
+  <!-- SALES REPORT SUB-TAB -->
+  <div id="reports-sales">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:14px">
+      <div>
+        <div style="font-size:12px;color:var(--text2)" id="log-date"></div>
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button class="btn-secondary" onclick="exportCSV()">⬇ CSV</button>
+          <button class="btn-secondary" onclick="exportLogPDF()">📄 PDF</button>
+        </div>
+      </div>
+      <!-- Top-right summary card: total sales, count, and breakdown per payment type -->
+      <div id="log-summary-card" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;min-width:240px"></div>
+    </div>
+    <div class="filter-row">
+      <input type="date" id="filter-date-from" onchange="renderLog()"/>
+      <span style="font-size:12px;color:var(--text2)">to</span>
+      <input type="date" id="filter-date-to" onchange="renderLog()"/>
+      <button class="btn-secondary" style="font-size:12px" onclick="setDateRange('today')">Today</button>
+      <button class="btn-secondary" style="font-size:12px" onclick="setDateRange('week')">This week</button>
+      <button class="btn-secondary" style="font-size:12px" onclick="setDateRange('month')">This month</button>
+
+      <!-- Multi-select: Payment type -->
+      <div class="multiselect" id="multiselect-payment">
+        <button type="button" class="multiselect-trigger" onclick="toggleMultiselect('payment')">
+          <span id="multiselect-payment-label">All payment types</span> ▾
+        </button>
+        <div class="multiselect-panel" id="multiselect-payment-panel">
+          <label class="multiselect-option"><input type="checkbox" value="__all__" onchange="onMultiselectAllToggle('payment',this.checked)"/> All</label>
+          <div class="multiselect-divider"></div>
+          <label class="multiselect-option"><input type="checkbox" value="M-Pesa" onchange="onMultiselectOptionToggle('payment')"/> M-Pesa</label>
+          <label class="multiselect-option"><input type="checkbox" value="Cash" onchange="onMultiselectOptionToggle('payment')"/> Cash</label>
+          <label class="multiselect-option"><input type="checkbox" value="Card" onchange="onMultiselectOptionToggle('payment')"/> Card</label>
+          <label class="multiselect-option"><input type="checkbox" value="Credit" onchange="onMultiselectOptionToggle('payment')"/> Credit</label>
+          <label class="multiselect-option"><input type="checkbox" value="Split" onchange="onMultiselectOptionToggle('payment')"/> Split</label>
+        </div>
+      </div>
+
+      <!-- Multi-select: Staff -->
+      <div class="multiselect" id="multiselect-staffms">
+        <button type="button" class="multiselect-trigger" onclick="toggleMultiselect('staffms')">
+          <span id="multiselect-staffms-label">All staff</span> ▾
+        </button>
+        <div class="multiselect-panel" id="multiselect-staffms-panel"></div>
+      </div>
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow-x:auto;-webkit-overflow-scrolling:touch">
+      <table class="data-table"><thead><tr>
+        <th>Date/Time</th><th>Items</th><th>Customer</th><th id="sales-identifier-col">Plate</th><th>Staff</th><th>Payment</th><th>Amount</th>
+      </tr></thead>
+      <tbody id="log-tbody"></tbody></table>
+    </div>
+  </div>
+
+  <!-- STAFF SALES REPORT SUB-TAB -->
+  <div id="reports-staff" style="display:none">
+    <div style="font-size:13px;color:var(--text2);margin-bottom:16px">Productivity by staff member — transaction counts, sale value, and credit exposure, filterable by date.</div>
+    <div class="filter-row">
+      <input type="date" id="staff-report-date-from" onchange="renderStaffSalesReport()"/>
+      <span style="font-size:12px;color:var(--text2)">to</span>
+      <input type="date" id="staff-report-date-to" onchange="renderStaffSalesReport()"/>
+      <button class="btn-secondary" style="font-size:12px" onclick="setStaffReportDateRange('today')">Today</button>
+      <button class="btn-secondary" style="font-size:12px" onclick="setStaffReportDateRange('week')">This week</button>
+      <button class="btn-secondary" style="font-size:12px" onclick="setStaffReportDateRange('month')">This month</button>
+      <button class="btn-secondary" onclick="exportStaffSalesPDF()">📄 PDF</button>
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow-x:auto;-webkit-overflow-scrolling:touch">
+      <table class="data-table"><thead><tr>
+        <th>Staff</th><th>No. of Transactions</th><th>Total Sale Value</th><th>Credit Sales</th><th>Sales Paid</th><th>Free Rewards Given</th>
+      </tr></thead>
+      <tbody id="staff-report-tbody"></tbody></table>
+    </div>
+  </div>
+
+  <!-- CUSTOM REPORT SUB-TAB -->
+  <div id="reports-custom" style="display:none">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:16px">
+      <div class="setup-grid" id="cr-builder-grid" style="grid-template-columns:1fr 1fr 1fr">
+        <div class="product-form-section" style="margin-bottom:0">
+          <label>Date range</label>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input type="date" class="form-input" id="cr-date-from"/>
+            <span style="font-size:12px;color:var(--text2)">to</span>
+            <input type="date" class="form-input" id="cr-date-to"/>
+          </div>
+        </div>
+        <div class="product-form-section" style="margin-bottom:0">
+          <label>Fields to include</label>
+          <div id="cr-fields-list" style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:6px"></div>
+        </div>
+        <div class="product-form-section" style="margin-bottom:0">
+          <label>Preview</label>
+          <button class="btn-primary" style="margin-top:6px" onclick="previewCustomReport()">👁️ Preview as CSV</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live in-app preview (table form, built from the same fields a CSV would have) -->
+    <div id="cr-preview-area" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+        <div style="font-size:13px;font-weight:600" id="cr-preview-title">Preview</div>
+        <div style="display:flex;gap:8px">
+          <div class="mode-toggle" style="margin-bottom:0">
+            <div class="mode-opt selected" id="cr-format-pdf" onclick="setCustomReportFormat('pdf')">📄 PDF</div>
+            <div class="mode-opt" id="cr-format-csv" onclick="setCustomReportFormat('csv')">⬇ CSV</div>
+          </div>
+          <button class="btn-secondary" onclick="generateCustomReport()">Download / Send →</button>
+        </div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:auto;max-height:420px">
+        <table class="data-table" id="cr-preview-table"></table>
+      </div>
+    </div>
+    <div id="cr-preview-empty" class="empty-state">
+      <div class="empty-state-icon">🛠️</div>
+      <p>Pick your fields and date range, then preview before downloading or sending.</p>
+    </div>
+  </div>
+
+  <div class="footer" id="footer-log"></div>
+</div>
+
+<!-- RECONCILIATION VIEW -->
+<div class="view" id="view-recon">
+  <div style="font-size:16px;font-weight:600;margin-bottom:4px">End-of-day reconciliation</div>
+  <div style="font-size:13px;color:var(--text2);margin-bottom:16px">Upload, photograph, or scan your payment records to match against today's sales.</div>
+  <div id="recon-history-list" style="margin-bottom:16px"></div>
+  <div id="recon-upload-area">
+    <div class="upload-zone" onclick="document.getElementById('file-upload-input').click()">
+      <div class="upload-icon">📂</div>
+      <div class="upload-text">Drop M-Pesa statement or bank CSV here</div>
+      <div class="upload-sub">or click to browse · Supports CSV, XLSX, PDF, JPG, PNG</div>
+    </div>
+    <input type="file" id="file-upload-input" accept=".csv,.xlsx,.pdf,.jpg,.jpeg,.png" style="display:none" onchange="handleFileUpload(this.files)"/>
+    <div class="recon-actions-grid">
+      <button class="btn-primary" style="margin-top:0" onclick="document.getElementById('file-upload-input').click()">📤 Upload file</button>
+      <button class="btn-primary" style="margin-top:0;background:var(--purple)" onclick="document.getElementById('camera-input').click()">📸 Take photo</button>
+    </div>
+    <input type="file" id="camera-input" accept="image/*" capture="environment" style="display:none" onchange="handleFileUpload(this.files)"/>
+    <div style="margin-top:10px"><button class="btn-secondary" style="width:100%" onclick="runDemoRecon()">▶ Run demo reconciliation</button></div>
+    <div class="ocr-preview" id="ocr-preview"></div>
+  </div>
+  <div id="recon-results" style="display:none">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <div style="font-size:14px;font-weight:600">Reconciliation report</div>
+      <div style="font-size:12px;color:var(--text2)" id="recon-date-label"></div>
+    </div>
+    <div id="leakage-alert"></div>
+    <div class="recon-stats" id="recon-stats"></div>
+    <div id="recon-received-breakdown" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:16px"></div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow-x:auto;-webkit-overflow-scrolling:touch">
+      <table class="data-table"><thead><tr>
+        <th>Transaction</th><th>POS record</th><th>Payment record</th><th>Δ Gap</th><th>Status</th>
+      </tr></thead>
+      <tbody id="recon-tbody"></tbody></table>
+    </div>
+    <div style="margin-top:12px;display:flex;gap:8px">
+      <button class="btn-secondary" onclick="backToReconUpload()">← New reconciliation</button>
+      <button class="btn-secondary" onclick="exportReconPDF()">📄 Export PDF</button>
+    </div>
+  </div>
+  <div class="footer" id="footer-recon"></div>
+</div>
+
+<!-- APPROVALS VIEW -->
+<div class="view" id="view-approvals">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+    <div style="font-size:16px;font-weight:600">Product approvals</div>
+    <span id="current-role-badge" class="pill pill-amber">Maker</span>
+  </div>
+  <div style="font-size:13px;color:var(--text2);margin-bottom:20px" id="approvals-subtitle">Submit new products or price changes for manager review.</div>
+  <div class="tab-bar">
+    <div class="tab-item active" id="tab-pending" onclick="switchApprovalTab('pending',this)">Pending <span id="pending-count" style="background:var(--amber-light);color:var(--amber);border-radius:20px;padding:1px 7px;font-size:11px;margin-left:4px">0</span></div>
+    <div class="tab-item" id="tab-returned" onclick="switchApprovalTab('returned',this)">Returned to me <span id="returned-count" style="background:var(--amber-light);color:var(--amber);border-radius:20px;padding:1px 7px;font-size:11px;margin-left:4px">0</span></div>
+    <div class="tab-item" id="tab-history" onclick="switchApprovalTab('history',this)">History</div>
+    <div class="tab-item" id="tab-audit" onclick="switchApprovalTab('audit',this)">Audit trail</div>
+  </div>
+  <div id="approvals-pending"><div id="pending-list"></div></div>
+  <div id="approvals-returned" style="display:none"><div id="returned-list"></div></div>
+  <div id="approvals-history" style="display:none">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow-x:auto;-webkit-overflow-scrolling:touch">
+      <table class="data-table"><thead><tr><th>Case ID</th><th>Product</th><th>Change</th><th>Submitted by</th><th>Reviewed by</th><th>Date</th><th>Status</th></tr></thead>
+      <tbody id="history-tbody"></tbody></table>
+    </div>
+  </div>
+  <div id="approvals-audit" style="display:none">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px"><div id="audit-list"></div></div>
+  </div>
+  <div class="footer" id="footer-approvals"></div>
+</div>
+
+<!-- CREDIT REPORT VIEW -->
+<div class="view" id="view-credit">
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:14px">
+    <div>
+      <div style="font-size:16px;font-weight:600" id="credit-view-title">Outstanding credit</div>
+      <div style="font-size:12px;color:var(--text2);margin-top:2px" id="credit-view-subtitle">All sales recorded as Credit payment that have not yet been paid.</div>
+    </div>
+    <div id="credit-summary-card" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;min-width:200px"></div>
+  </div>
+  <div class="filter-row">
+    <button class="btn-secondary" style="font-size:12px" id="credit-filter-outstanding" onclick="setCreditFilter('outstanding',this)">Outstanding</button>
+    <button class="btn-secondary" style="font-size:12px" id="credit-filter-paid" onclick="setCreditFilter('paid',this)">Credit Paid</button>
+    <button class="btn-secondary" style="font-size:12px" id="credit-filter-all" onclick="setCreditFilter('all',this)">All</button>
+    <input type="date" id="credit-date-from" onchange="renderCreditReport()" title="From date"/>
+    <span style="font-size:12px;color:var(--text2)">to</span>
+    <input type="date" id="credit-date-to" onchange="renderCreditReport()" title="To date"/>
+    <button class="btn-secondary" style="font-size:12px" onclick="clearCreditDateFilter()">Clear dates</button>
+    <button class="btn-secondary" onclick="exportCreditPDF()">📄 PDF</button>
+  </div>
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow-x:auto;-webkit-overflow-scrolling:touch">
+    <table class="data-table" id="credit-table"><thead><tr>
+      <th><input type="checkbox" id="credit-select-all" onchange="toggleSelectAllCredit(this.checked)" title="Select all outstanding"/></th>
+      <th>Date</th><th id="credit-identifier-col">Plate</th><th>Customer</th><th>Items</th><th>Staff</th><th>Amount</th><th>Status</th><th>Cleared By</th>
+    </tr></thead>
+    <tbody id="credit-tbody"></tbody></table>
+  </div>
+  <div id="credit-bulk-actions" style="display:none;margin-top:12px;display:flex;gap:10px;align-items:center">
+    <span id="credit-selected-count" style="font-size:13px;color:var(--text2)">0 selected</span>
+    <button class="btn-approve" onclick="markSelectedCreditPaid()">✅ Mark selected as paid</button>
+  </div>
+  <div class="footer" id="footer-credit"></div>
+</div>
+
+<!-- MY RETURNED ITEMS VIEW (maker-facing, separate from checker's Approvals tab) -->
+<div class="view" id="view-myreturns">
+  <div style="font-size:16px;font-weight:600;margin-bottom:4px">My returned items</div>
+  <div style="font-size:13px;color:var(--text2);margin-bottom:20px">Product or price requests a manager sent back to you for amendment. Edit and resubmit — the case ID stays the same so the full history is preserved.</div>
+  <div id="myreturns-list"></div>
+  <div class="footer" id="footer-myreturns"></div>
+</div>
+
+<!-- ALERTS VIEW -->
+<div class="view" id="view-alerts">
+  <div style="font-size:16px;font-weight:600;margin-bottom:4px">Owner alerts</div>
+  <div style="font-size:13px;color:var(--text2);margin-bottom:20px">Loyalty milestones, free washes earned, and other notifications. <span class="pill pill-gold">Phase 2: SMS to customer + thank-you message</span></div>
+  <div id="alerts-list"></div>
+  <div class="footer" id="footer-alerts"></div>
+</div>
+
+<!-- SETUP VIEW -->
+<div class="view" id="view-setup">
+  <div style="font-size:16px;font-weight:600;margin-bottom:16px">Business setup</div>
+  <div class="setup-grid">
+    <div class="setup-card">
+      <h4>🚗 Services & prices</h4>
+      <div id="setup-products"></div>
+      <button class="btn-secondary" style="margin-top:10px;width:100%;font-size:12px" onclick="openProductForm()">+ Request new product / price change</button>
+    </div>
+    <div class="setup-card">
+      <h4>🏢 Business info</h4>
+      <div class="form-row" style="background:var(--surface2);border-radius:var(--radius-sm);padding:8px 10px;margin-bottom:10px">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:2px">Business ID (read-only — use this when contacting support)</div>
+        <div id="biz-id-display" class="mono" style="font-size:11px;color:var(--text2);word-break:break-all"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-label">Business logo</div>
+        <div style="display:flex;align-items:center;gap:12px">
+          <div id="logo-preview-box" style="width:56px;height:56px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0">
+            <img id="logo-preview-img" src="" alt="" style="display:none;width:100%;height:100%;object-fit:cover"/>
+            <span id="logo-preview-fallback" style="font-size:26px">🚗</span>
+          </div>
+          <div style="flex:1">
+            <input type="file" id="logo-file-input" accept="image/*" style="display:none" onchange="handleLogoUpload(this.files)"/>
+            <button class="btn-secondary" style="width:100%;font-size:12px" onclick="document.getElementById('logo-file-input').click()">📤 Upload logo</button>
+            <div style="font-size:11px;color:var(--text3);margin-top:4px">PNG or JPG, square works best. Shown on every screen.</div>
+          </div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-label">Business name</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input class="form-input" value="Sparkle Car Wash" id="biz-name" onchange="updateBizName(this.value)" style="flex:1"/>
+          <input type="color" id="biz-name-color" value="#c1543a" onchange="updateBizNameColor(this.value)" title="Pick the color for your business name" style="width:38px;height:36px;border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;padding:2px"/>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px">This color is shown wherever your business name appears in the interface.</div>
+      </div>
+      <div class="form-row"><div class="form-label">Physical address</div><input class="form-input" value="Westlands, Nairobi" id="biz-loc" placeholder="e.g. Waiyaki Way, Westlands, Nairobi"/></div>
+      <div class="form-row"><div class="form-label">Email address</div><input class="form-input" type="email" id="biz-email" placeholder="e.g. info@sparklecarwash.co.ke"/></div>
+      <div class="form-row">
+        <div class="form-label">Telephone number</div>
+        <input class="form-input" id="biz-phone" placeholder="e.g. 0712345678" oninput="validateBizPhoneLive()"/>
+        <div class="field-error" id="biz-phone-error">Enter a valid Kenyan number, e.g. 0712345678</div>
+      </div>
+      <div class="form-row"><div class="form-label">Currency</div><input class="form-input" value="KES" id="biz-currency"/></div>
+      <div class="form-row"><div class="form-label">SME vertical</div>
+        <select class="form-input" id="biz-vertical" onchange="updateBizVertical(this.value)">
+          <option value="🚗">Car Wash 🚗</option><option value="✂️">Salon / Barber ✂️</option>
+          <option value="🍽️">Restaurant 🍽️</option><option value="🏪">Retail Shop 🏪</option>
+          <option value="💊">Pharmacy 💊</option><option value="👕">Laundry 👕</option>
+        </select>
+      </div>
+      <button class="btn-primary" style="margin-top:4px" onclick="saveBusinessSettings()">Save settings</button>
+    </div>
+    <div class="setup-card">
+      <h4>🎁 Loyalty & promotions</h4>
+      <div class="toggle-row">
+        <div><div style="font-size:13px;font-weight:500">Every Nth wash free</div><div id="loyalty-track-desc" style="font-size:11px;color:var(--text2)">Tracked by vehicle plate number</div></div>
+        <div class="toggle on" id="loyalty-toggle" onclick="toggleLoyalty()"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-label">Free after every</div>
+        <input class="form-input" type="number" id="loyalty-every" value="10" min="2" onchange="updateLoyaltyEvery(this.value)"/>
+      </div>
+      <div class="form-row">
+        <div class="form-label">Free reward type</div>
+        <div class="mode-toggle">
+          <div class="mode-opt" id="loyalty-mode-full" onclick="setLoyaltyMode('full')">🎁 Fully free</div>
+          <div class="mode-opt selected" id="loyalty-mode-cap" onclick="setLoyaltyMode('cap')">💰 Fixed cap</div>
+        </div>
+        <div id="loyalty-cap-row" class="form-row" style="margin-top:8px;margin-bottom:0">
+          <input class="form-input" type="number" id="loyalty-limit" value="500" min="1" onchange="updateLoyaltyLimit(this.value)" placeholder="e.g. 500"/>
+          <div style="font-size:11px;color:var(--text3);margin-top:3px">The business covers up to this amount. Any balance above it is collected from the customer.</div>
+        </div>
+        <div id="loyalty-full-note" style="display:none;font-size:11px;color:var(--green);margin-top:6px;padding:8px 10px;background:var(--green-light);border-radius:var(--radius-sm)">The entire service value is covered — customer pays nothing regardless of the total.</div>
+      </div>
+      <div style="font-size:12px;color:var(--text2);line-height:1.7">
+        Owner gets an alert in the <strong>🔔 Alerts</strong> tab whenever a customer earns a free reward.
+      </div>
+    </div>
+    <div class="setup-card">
+      <h4>👥 Staff & users</h4>
+      <div id="setup-staff"></div>
+      <button class="btn-secondary" style="margin-top:10px;width:100%;font-size:12px" onclick="openUserForm()">+ Add staff / user account</button>
+    </div>
+    <div class="setup-card">
+      <h4>🔗 Integrations</h4>
+      <div style="font-size:13px;color:var(--text2);line-height:1.8">
+        <div>📱 <strong>M-Pesa</strong> <span class="pill pill-green">Connected</span></div>
+        <div style="margin-top:8px">💳 <strong>Equity Bank</strong> <span class="pill pill-amber">Pending</span></div>
+        <div style="margin-top:8px">📊 <strong>KRA iTax</strong> <span class="pill pill-amber">Pending</span></div>
+        <div style="margin-top:8px">📦 <strong>Quickbooks</strong> <span class="pill pill-red">Not connected</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="footer" id="footer-setup"></div>
+</div>
+
+</div><!-- end .main-content -->
+</div><!-- end .app-shell -->
+
+<!-- MODALS are outside main-content but inside app-root so they render above everything -->
+<!-- SALE SUCCESS MODAL -->
+<div class="modal-bg" id="sale-modal">
+  <div class="modal">
+    <div class="success-icon">✅</div>
+    <h3 style="text-align:center">Sale recorded!</h3>
+    <p style="text-align:center" id="modal-summary"></p>
+    <div id="modal-mpesa" style="display:none;background:var(--teal-light);border-radius:var(--radius-sm);padding:10px;font-size:12px;color:var(--teal);margin-bottom:8px;line-height:1.7"></div>
+    <div id="modal-loyalty" style="display:none;background:var(--gold-light);border-radius:var(--radius-sm);padding:10px;font-size:12px;color:#8a6d12;margin-bottom:8px;line-height:1.7"></div>
+    <div class="modal-actions"><button class="btn-primary" onclick="closeModal()">New sale</button></div>
+  </div>
+</div>
+
+<!-- PRODUCT FORM MODAL -->
+<div class="modal-bg" id="product-modal">
+  <div class="modal">
+    <h3 id="product-modal-title">Request new product</h3>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:16px" id="product-modal-sub">This will be sent to the manager for approval before going live.</p>
+    <div class="product-form-section"><label>Product name</label><input class="form-input" id="pf-name" placeholder="e.g. Premium Wax"/></div>
+    <div class="product-form-section"><label>Price (KES)</label><input class="form-input" id="pf-price" type="number" placeholder="e.g. 700"/></div>
+    <div class="product-form-section"><label>Category</label>
+      <select class="form-input" id="pf-cat"><option value="service">Service</option><option value="addon">Add-on</option></select>
+    </div>
+    <div class="product-form-section">
+      <label>Icon</label>
+      <div class="icon-grid" id="icon-grid"></div>
+      <div class="custom-icon-row">
+        <input class="form-input" id="pf-custom-icon" placeholder="Or paste any emoji 🪄" maxlength="4"/>
+        <button class="btn-secondary" onclick="useCustomIcon()">Use</button>
+      </div>
+    </div>
+    <div class="product-form-section"><label>Reason for request</label><input class="form-input" id="pf-reason" placeholder="e.g. Customer demand, competitor pricing"/></div>
+    <div id="pf-edit-info" style="display:none;background:var(--amber-light);border-radius:var(--radius-sm);padding:10px;font-size:12px;color:var(--amber);margin-bottom:4px"></div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeProductModal()" style="flex:1">Cancel</button>
+      <button class="btn-primary" onclick="submitProductRequest()" style="flex:2;margin-top:0">Submit for approval</button>
+    </div>
+  </div>
+</div>
+
+<!-- REJECT / RETURN MODAL -->
+<div class="modal-bg" id="reject-modal">
+  <div class="modal">
+    <h3 id="reject-modal-title">Reject request</h3>
+    <p id="reject-modal-sub">Provide a reason so the staff member understands the decision.</p>
+    <input class="form-input" id="reject-reason-input" placeholder="e.g. Price too high, needs justification"/>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeRejectModal()" style="flex:1">Cancel</button>
+      <button id="reject-confirm-btn" class="btn-reject" onclick="confirmReject()" style="flex:2">Reject with reason</button>
+    </div>
+  </div>
+</div>
+
+<!-- USER FORM MODAL -->
+<div class="modal-bg" id="user-modal">
+  <div class="modal">
+    <h3>Add staff / user account</h3>
+    <div class="product-form-section"><label>Full name</label><input class="form-input" id="uf-name" placeholder="e.g. James Kariuki"/></div>
+    <div class="product-form-section"><label>Username</label><input class="form-input" id="uf-username" placeholder="e.g. james.k"/></div>
+    <div class="product-form-section"><label>Password</label><input class="form-input" id="uf-password" placeholder="Set a password" type="text"/></div>
+    <div class="product-form-section"><label>Role</label>
+      <select class="form-input" id="uf-role">
+        <option value="maker">Maker — Staff (POS + Reconciliation)</option>
+        <option value="checker">Checker — Manager (Approvals + Setup + full access)</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeUserModal()" style="flex:1">Cancel</button>
+      <button class="btn-primary" onclick="saveNewUser()" style="flex:2;margin-top:0">Create account</button>
+    </div>
+  </div>
+</div>
+
+<!-- DOWNLOAD / SHARE MODAL -->
+<div class="modal-bg" id="share-modal">
+  <div class="modal">
+    <h3>Share report</h3>
+    <p>How would you like to receive this report?</p>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">
+      <button class="btn-secondary" style="text-align:left" onclick="shareReportVia('download')">⬇️ Download to this device</button>
+      <button class="btn-secondary" style="text-align:left" onclick="shareReportVia('email')">📧 Send via Email</button>
+      <button class="btn-secondary" style="text-align:left" onclick="shareReportVia('sms')">💬 Send via Text/SMS</button>
+      <button class="btn-secondary" style="text-align:left" onclick="shareReportVia('whatsapp')">🟢 Send via WhatsApp</button>
+      <button class="btn-secondary" style="text-align:left" onclick="shareReportVia('link')">🔗 Get a shareable link</button>
+    </div>
+    <div id="share-recipient-area" style="display:none">
+      <div class="form-row">
+        <div class="form-label" id="share-recipient-label">Recipient</div>
+        <input class="form-input" id="share-recipient-input" placeholder=""/>
+        <div class="field-error" id="share-recipient-error">Enter a valid recipient</div>
+      </div>
+      <button class="btn-primary" style="margin-top:0" onclick="confirmShareSend()">Send</button>
+    </div>
+    <div id="share-link-area" style="display:none">
+      <div style="font-size:12px;color:var(--text2);margin-bottom:10px">Since this is a local prototype, the file must first be downloaded, then the link below describes how it would normally be shared once hosted.</div>
+      <div class="form-input" style="background:var(--surface2);word-break:break-all;font-size:11px" id="share-link-display"></div>
+      <button class="btn-secondary" style="width:100%;margin-top:8px" onclick="copyShareLink()">📋 Copy link text</button>
+    </div>
+    <div class="modal-actions"><button class="btn-secondary" style="flex:1" onclick="closeShareModal()">Close</button></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

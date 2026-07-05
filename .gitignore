@@ -1,0 +1,28 @@
+# Environment variables - NEVER commit these to Git
+.env
+.env.local
+.env.production
+.env.*.local
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor directories
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+
+# Node (if you add a build step later)
+node_modules/
+dist/
+.cache/
+
+# Netlify
+.netlify/
