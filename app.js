@@ -588,43 +588,77 @@ async function submitSignUp() {
     errEl.textContent = 'PIN must be exactly 4 digits';
     errEl.classList.add('show'); return;
   }
-  if (question === '') {
+  if (!question) {
     errEl.textContent = 'Please choose a security question';
     errEl.classList.add('show'); return;
   }
   if (!db) {
-    errEl.textContent = 'Not connected to server';
+    errEl.textContent = 'Not connected to server. Check your internet connection.';
     errEl.classList.add('show'); return;
   }
 
   if (btn) { btn.disabled = true; btn.textContent = 'Creating account…'; }
   try {
-    // Call the onboard-business Edge Function
-    const fnUrl = _cleanUrl.replace('.supabase.co', '.supabase.co') +
-      '/functions/v1/onboard-business';
-    const response = await fetch(fnUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SUPABASE_ANON },
-      body: JSON.stringify({
-        businessName: bizName, vertical,
-        ownerUsername: username, ownerDisplayName: dispName, ownerPin: pin,
-        securityQuestion: question, securityAnswer: answer
-      })
-    });
-    const result = await response.json();
-    if (!response.ok || !result.success) {
-      errEl.textContent = result.error || 'Registration failed';
+    // Build Edge Function URL from the clean Supabase project URL
+    const fnUrl = _cleanUrl + '/functions/v1/onboard-business';
+
+    // 15-second timeout so button never freezes permanently
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+
+    let response;
+    try {
+      response = await fetch(fnUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + SUPABASE_ANON
+        },
+        body: JSON.stringify({
+          businessName: bizName, vertical,
+          ownerUsername: username, ownerDisplayName: dispName, ownerPin: pin,
+          securityQuestion: question, securityAnswer: answer
+        }),
+        signal: controller.signal
+      });
+    } catch(fetchErr) {
+      if (fetchErr.name === 'AbortError') {
+        errEl.textContent = 'Request timed out. The server may not be ready yet — please try again in 30 seconds.';
+      } else {
+        errEl.textContent = 'Could not reach the server. Check your internet connection.';
+      }
+      errEl.classList.add('show'); return;
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    let result;
+    try {
+      result = await response.json();
+    } catch(e) {
+      errEl.textContent = 'Unexpected response from server (status ' + response.status + '). Try again.';
       errEl.classList.add('show'); return;
     }
-    // Auto-login after successful registration
+
+    if (!response.ok || !result.success) {
+      // Show the exact error from the Edge Function so you can diagnose it
+      errEl.textContent = result.error || ('Server error ' + response.status + '. Check Edge Functions are deployed.');
+      errEl.classList.add('show'); return;
+    }
+
+    // Store business ID immediately
+    businessId = result.businessId;
+    localStorage.setItem('ib_business_id', businessId);
+
     showToast('✅ Account created! Logging you in…');
+    // Pre-fill login fields and attempt login
     document.getElementById('login-username').value = username;
     document.getElementById('login-pin').value = pin;
     hideSignUp();
     await attemptLogin();
   } catch(e) {
     logError('Sign up', e);
-    errEl.textContent = 'Could not connect to server. Check your internet.';
+    errEl.textContent = 'Something went wrong: ' + (e.message || 'unknown error');
     errEl.classList.add('show');
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = 'Create account'; }
