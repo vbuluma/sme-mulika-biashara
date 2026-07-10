@@ -1,11 +1,11 @@
 
 // ─── SUPABASE CONFIG ──────────────────────────────────────────
-// Real values injected by inject-env.sh at Netlify build time.
-// Set SUPABASE_URL and SUPABASE_ANON_KEY in:
-//   Netlify > Site configuration > Environment variables
-// Never hardcode credentials here — this file is committed to Git.
-const SUPABASE_URL  = 'YOUR_SUPABASE_URL';
-const SUPABASE_ANON = 'YOUR_SUPABASE_ANON_KEY';
+// The anon key is safe to include here — it is designed to be
+// public. Supabase Row Level Security (RLS) is the real security
+// boundary, not keeping this key secret. The service_role key
+// (which bypasses RLS) lives only in Edge Functions, never here.
+const SUPABASE_URL  = 'https://iorzouwqhaygbylzifxf.supabase.co';
+const SUPABASE_ANON = 'sb_publishable_EA2tjP3T94zXFOfGXChpFw_Uta4y_s5';
 
 // Sanitize - strip any trailing /rest/v1 or /rest/v1/ that was accidentally
 // included in the URL. The Supabase JS client appends this itself; including
@@ -25,7 +25,7 @@ function logError(context, error) {
 }
 
 function initSupabase() {
-  if (_cleanUrl === 'YOUR_SUPABASE_URL' || SUPABASE_ANON === 'YOUR_SUPABASE_ANON_KEY') {
+  if (_cleanUrl.includes('YOUR_') || SUPABASE_ANON.includes('YOUR_')) {
     showDbBanner('offline');
     console.warn('[Mulika Biashara] Supabase not configured — running in offline/localStorage mode.');
     return;
