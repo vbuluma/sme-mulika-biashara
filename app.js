@@ -5,7 +5,9 @@
 // boundary, not keeping this key secret. The service_role key
 // (which bypasses RLS) lives only in Edge Functions, never here.
 const SUPABASE_URL  = 'https://iorzouwqhaygbylzifxf.supabase.co';
-const SUPABASE_ANON = 'sb_publishable_EA2tjP3T94zXFOfGXChpFw_Uta4y_s5';
+// REPLACE THE LINE BELOW with your anon key from Supabase → Settings → API → anon public
+// It starts with eyJhbGci and is about 200 characters long
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlvcnpvdXdxaGF5Z2J5bHppZnhmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExNzcwNzQsImV4cCI6MjA5Njc1MzA3NH0.hG3Q4-mFWHYSulbpqt-ZAeGEt5fMFD-H7awA4loia-c';
 
 // Sanitize - strip any trailing /rest/v1 or /rest/v1/ that was accidentally
 // included in the URL. The Supabase JS client appends this itself; including
@@ -25,9 +27,9 @@ function logError(context, error) {
 }
 
 function initSupabase() {
-  if (_cleanUrl.includes('YOUR_') || SUPABASE_ANON.includes('YOUR_')) {
+  if (_cleanUrl.includes('YOUR_') || SUPABASE_ANON.includes('PASTE_') || SUPABASE_ANON.length < 100) {
     showDbBanner('offline');
-    console.warn('[Mulika Biashara] Supabase not configured — running in offline/localStorage mode.');
+    console.warn('[Mulika Biashara] Supabase not configured — anon key missing or too short. Check app.js line 8.');
     return;
   }
   try {
