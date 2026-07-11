@@ -11,28 +11,25 @@
   [headers.values]
     X-Frame-Options = "DENY"
     X-Content-Type-Options = "nosniff"
-    X-XSS-Protection = "1; mode=block"
     Referrer-Policy = "strict-origin-when-cross-origin"
     Strict-Transport-Security = "max-age=31536000; includeSubDomains"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.supabase.co https://cdnjs.cloudflare.com; img-src 'self' data: blob:; font-src 'self';"
 
-# Never cache HTML (so updates deploy instantly)
 [[headers]]
   for = "/index.html"
   [headers.values]
     Cache-Control = "no-cache, no-store, must-revalidate"
 
-# Cache CSS and JS for 1 day
+[[headers]]
+  for = "/app.js"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+
 [[headers]]
   for = "/styles.css"
   [headers.values]
     Cache-Control = "public, max-age=86400"
 
-[[headers]]
-  for = "/app.js"
-  [headers.values]
-    Cache-Control = "public, max-age=86400"
-
-# Serve index.html for all routes
 [[redirects]]
   from = "/*"
   to = "/index.html"
