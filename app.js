@@ -15,13 +15,28 @@ let db = null, dbReady = false;
 // Global Users Array 
 let users = []; 
 
-// Locate your data loading function and ensure user_roles populates users:
 async function loadAppData() {
-  if (!dbReady || !db) return;
-  // 🟢 FIX: Replaced broken 'supabase' instance with your correct global 'db' instance
-  const { data: user_roles, error } = await db.from('user_roles').select('*');
-  if (!error && user_roles) {
-    users = user_roles; // Feeds the array that renderSetup().map is looking for
+  if (!dbReady || !db || !businessId) return;
+
+  // 1. Read from 'profiles' instead of 'user_roles'
+  // 2. Filter by 'business_id' so shops only see their own staff
+  const { data: profileRows, error } = await db
+    .from('profiles')
+    .select('*')
+    .eq('business_id', businessId);
+
+  if (error) {
+    console.error("Error loading staff profiles:", error);
+    return;
+  }
+
+  if (profileRows) {
+    // Map display_name to .name to keep downstream rendering maps happy
+    users = profileRows.map(u => ({
+      ...u,
+      name: u.display_name
+    }));
+    
     if (typeof renderSetup === 'function') renderSetup();      
   }
 }
