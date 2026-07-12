@@ -179,7 +179,8 @@ async function saveNewUser() {
   const role     = document.getElementById('uf-role').value;
   const btn      = document.querySelector('#user-modal-btn') || document.querySelector('.modal-footer .btn-primary');
   
-  const errEl = document.getElementById('signup-error') || document.getElementById('login-error');
+  // Grab the businessId from your application's active state
+  const activeBusinessId = typeof businessId !== 'undefined' ? businessId : (typeof currentUser !== 'undefined' ? currentUser.businessId : null);
 
   if (!name || !username || !pin) { 
     if (typeof showToast === 'function') showToast('⚠️ Please fill in all fields'); 
@@ -189,37 +190,45 @@ async function saveNewUser() {
     if (typeof showToast === 'function') showToast('⚠️ PIN must be exactly 4 digits');
     return;
   }
+  if (!activeBusinessId) {
+    if (typeof showToast === 'function') showToast('⚠️ Missing active business context');
+    return;
+  }
 
   // 1. Change button UI to show it's working
   if (btn) {
     btn.disabled = true;
     btn.textContent = 'Creating...';
   }
-   try { 
-  // 2. Insert directly from DB Edge Function
+
+  try { 
+    // 2. Invoke Edge Function with the EXACT parameters it expects
     const { data, error } = await db.functions.invoke('add-staff-member', {
-  body: { 
-    name: name, 
-    username: username, 
-    pin: pin, 
-    role: role,
-    business_id: businessId 
-  }
-});
+      body: { 
+        businessId: activeBusinessId, 
+        staffUsername: username, 
+        staffDisplayName: name, 
+        staffPin: pin, 
+        staffRole: role 
+      }
+    });
 
     // 3. Handle explicit Database errors (like duplicate usernames)
-  if (error) {
+    if (error) {
       console.error("[Edge Function Error]", error);
-      showToast('❌ Failed to add staff: ' + (error.message || 'Server Error'));
+      if (typeof showToast === 'function') showToast('❌ Failed to add staff: ' + (error.message || 'Server Error'));
       return;
     }
 
-    // 4. If successful, update local arrays safely
-    if (data && data[0]) {
-      const newUser = data[0];
-      
-      // Ensure the object has both name and display_name so no other UI functions break
-      newUser.name = newUser.display_name; 
+    // 4. If successful, update local arrays safely (Processing the Edge Function Object return layout)
+    if (data && data.success) {
+      const newUser = {
+        username: data.staffUsername,
+        display_name: data.displayName,
+        name: data.displayName,
+        role: data.role,
+        business_id: activeBusinessId
+      };
       
       if (!Array.isArray(users)) users = [];
       users.push(newUser);
@@ -239,9 +248,16 @@ async function saveNewUser() {
         if (modal) modal.style.display = 'none';
       }
       
-      // 6. Refresh lists
-      if (typeof loadAppData === 'function') await loadAppData();
-      if (typeof renderSetup === 'function') renderSetup();
+      // 6. Refresh lists safely
+      try {
+        if (typeof loadAppData === 'function') await loadAppData();
+        if (typeof renderSetup === 'function') renderSetup();
+      } catch (refreshErr) {
+        console.error("Data refresh notice (possibly missing old variables):", refreshErr);
+      }
+    } else {
+      // Catch-all if server replied but success wasn't explicit
+      if (typeof showToast === 'function') showToast('⚠️ ' + (data?.error || 'Account registration failed.'));
     }
   } catch (e) {
     console.error("[System Exception Framework]", e);
