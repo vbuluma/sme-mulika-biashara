@@ -870,19 +870,10 @@ function nextCaseId() {
 }
 
 // ─── STATE ────────────────────────────────────────────────────
-let products = [
-  {id:'PRD0001',cat:'service',name:'Express Wash',price:300,icon:'🚿'},
-  {id:'PRD0002',cat:'service',name:'Full Wash',price:500,icon:'🚗'},
-  {id:'PRD0003',cat:'service',name:'Premium Detail',price:1500,icon:'✨'},
-  {id:'PRD0004',cat:'service',name:'Interior Clean',price:800,icon:'🪣'},
-  {id:'PRD0005',cat:'addon',name:'Tyre Shine',price:150,icon:'⚙️'},
-  {id:'PRD0006',cat:'addon',name:'Air Freshener',price:50,icon:'🌸'},
-  {id:'PRD0007',cat:'addon',name:'Wax Polish',price:500,icon:'💎'},
-  {id:'PRD0008',cat:'addon',name:'Seat Shampoo',price:300,icon:'🛋️'},
-];
-let productIdCounter = 8;
+let products = [];
+let productIdCounter = 0;
 let caseIdCounter = 0;
-let staff = ['James Kariuki','Mary Njoki','Peter Omondi','Faith Achieng'];
+let staff = []; //Populated dynamically from the Supabase profiles table
 let cart = {}, selectedPayment = 'M-Pesa', transactions = [], txCounter = 1000;
 let pendingRequests = [], requestHistory = [], auditLog = [], ownerAlerts = [], reconHistory = [];
 let editingProductId = null, rejectingRequestId = null, rejectAction = 'reject', selectedIcon = '🔧';
@@ -909,8 +900,7 @@ const ICONS = ['🚿','🚗','✨','🪣','⚙️','🌸','💎','🛋️','🔧
 
 try {
   const s = localStorage.getItem('ib_transactions'); if(s) transactions = JSON.parse(s);
-  const sp = localStorage.getItem('ib_products'); if(sp) products = JSON.parse(sp);
-  const ss = localStorage.getItem('ib_staff'); if(ss) staff = JSON.parse(ss);
+  // removed ib_products and ib_staff to load live data via Supabase
   const sr = localStorage.getItem('ib_pending'); if(sr) pendingRequests = JSON.parse(sr);
   const sh = localStorage.getItem('ib_history'); if(sh) requestHistory = JSON.parse(sh);
   const sa = localStorage.getItem('ib_audit'); if(sa) auditLog = JSON.parse(sa);
@@ -939,9 +929,10 @@ try {
 
 function save() {
   try {
+    function save() {
+  try {
     localStorage.setItem('ib_transactions', JSON.stringify(transactions));
-    localStorage.setItem('ib_products', JSON.stringify(products));
-    localStorage.setItem('ib_staff', JSON.stringify(staff));
+    // products and staff saved arrays removed to use live database updates
     localStorage.setItem('ib_pending', JSON.stringify(pendingRequests));
     localStorage.setItem('ib_history', JSON.stringify(requestHistory));
     localStorage.setItem('ib_audit', JSON.stringify(auditLog));
@@ -958,9 +949,104 @@ function save() {
     localStorage.setItem('ib_bizphone', businessPhone);
     localStorage.setItem('ib_pid_counter', String(productIdCounter));
     localStorage.setItem('ib_case_counter', String(caseIdCounter));
+    
+    // 🟢 NEW: Every time local storage updates, check if we can sync pending data to Supabase
+    if (navigator.onLine) {
+      syncOfflineDataToCloud();
+    }
   } catch(e){}
 }
+async function syncOfflineDataToCloud() {
+  if (!navigator.onLine || !businessId) return;
 
+  // Add the Background Sync Engine: 1. Sync local transactions that haven't been pushed to the database yet
+  // Assumes your transaction objects look like: { txId: 1001, amount: 500, is_synced: false }
+  const unsyncedTx = transactions.filter(tx => !tx.is_synced);
+
+  if (unsyncedTx.length > 0) {
+    console.log(`🔄 Found ${unsyncedTx.length} unsynced transactions. Uploading...`);
+    
+    for (let tx of unsyncedTx) {
+      try {
+        const { error } = await db
+          .from('transactions')
+          .insert([{
+            business_id: businessId,
+            receipt_no: tx.id || tx.txCounter,
+            amount: tx.price || tx.amount,
+            details: tx, // Send the whole local object for safekeeping
+            created_at: tx.date || new Date().toISOString()
+          }]);
+
+        if (!error) {
+          tx.is_synced = true; // Mark it clean locally!
+        }
+      } catch (err) {
+        console.error("Failed to sync individual record, will retry next loop:", err);
+      }
+    }
+    
+    // Save our updated array (with the new is_synced statuses) back to localStorage
+    // We temporarily block the loop from re-triggering to prevent infinite loops
+    try {
+      localStorage.setItem('ib_transactions', JSON.stringify(transactions));
+    } catch(e){}
+  }
+}
+
+// 🟢 Automatically catch when the browser reconnects to Wi-Fi/cellular networks
+window.addEventListener('online', syncOfflineDataToCloud);
+
+    // ─── CLOUD DATA ASSET INITIALIZER ENGINE ───────────────────────
+async function loadAppDataFromSupabase() {
+  const activeBusinessId = typeof businessId !== 'undefined' ? businessId : (typeof currentUser !== 'undefined' ? currentUser.businessId : null);
+  
+  if (!activeBusinessId) {
+    console.warn("Application context hold: activeBusinessId missing.");
+    return;
+  }
+
+  try {
+    // 1. Fetch Dynamic Products from Supabase
+    const { data: dbProducts, error: prodError } = await db
+      .from('products')
+      .select('*')
+      .eq('business_id', activeBusinessId)
+      .order('id', { ascending: true });
+
+    if (prodError) throw prodError;
+
+    products = (dbProducts || []).map(row => ({
+      id: row.id,
+      cat: row.category || row.cat || 'service',
+      name: row.name,
+      price: row.price,
+      icon: row.icon || '🔧',
+      status: row.status || 'available'
+    }));
+
+    // 2. Fetch Active Staff Members from the Profiles table
+    const { data: dbProfiles, error: staffError } = await db
+      .from('profiles')
+      .select('display_name')
+      .eq('business_id', activeBusinessId);
+
+    if (staffError) throw staffError;
+
+    // Pluck the single display_name string into your simple local lookup array
+    staff = (dbProfiles || []).map(profile => profile.display_name || 'Unnamed Staff');
+
+    // 3. Command interface layers to paint the fresh elements onto the browser viewport
+    if (typeof renderSetup === 'function') renderSetup();
+    if (typeof renderPos === 'function') renderPos();
+    if (typeof updateStaffDropdowns === 'function') updateStaffDropdowns();
+
+    console.log(`📡 Cloud Synchronization Completed. Active Inventory: ${products.length} items, Staff Capacity: ${staff.length} profiles.`);
+  } catch (err) {
+    console.error("Cloud compilation sync error:", err.message);
+  }
+}
+    
 function renderFooters() {
   // InverBrass stays exactly as-is in the footer, on every screen, regardless
   // of which SME is using the platform - this is the platform attribution.
