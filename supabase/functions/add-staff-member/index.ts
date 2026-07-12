@@ -14,14 +14,9 @@ const cors = {
 function stretchPin(pin: string, username: string): string {
   return `${pin}_${username.trim().toLowerCase()}_mulika_secure_2025`;
 }
+
 function usernameToEmail(username: string): string {
   return username.trim().toLowerCase().replace(/\s+/g, '.') + '@mulika.internal';
-}
-async function hashAnswer(answer: string): Promise<string> {
-  const normalized = answer.trim().toLowerCase();
-  const encoded = new TextEncoder().encode(normalized);
-  const buf = await crypto.subtle.digest('SHA-256', encoded);
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
 }
 
 serve(async (req) => {
@@ -36,15 +31,17 @@ serve(async (req) => {
 
     const {
       businessId,
-      staffUsername, staffDisplayName, staffPin,
-      securityQuestion, securityAnswer,
+      staffUsername, 
+      staffDisplayName, 
+      staffPin,
       staffRole
     } = await req.json();
 
-    if (!businessId || !staffUsername || !staffDisplayName || !staffPin || !securityQuestion || !securityAnswer) {
+    if (!businessId || !staffUsername || !staffDisplayName || !staffPin) {
       return new Response(JSON.stringify({ error: "Missing required fields" }),
         { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
     }
+
     if (!/^\d{4}$/.test(staffPin)) {
       return new Response(JSON.stringify({ error: "PIN must be exactly 4 digits" }),
         { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
@@ -94,8 +91,7 @@ serve(async (req) => {
 
     const maskedEmail = usernameToEmail(staffUsername);
     const stretchedPassword = stretchPin(staffPin, staffUsername);
-    const answerHash = await hashAnswer(securityAnswer);
-
+  
     const { data: newUser, error: createError } = await serviceClient.auth.admin.createUser({
       email: maskedEmail,
       password: stretchedPassword,
@@ -106,15 +102,17 @@ serve(async (req) => {
       { status: 400, headers: { ...cors, "Content-Type": "application/json" } }
     );
 
+    // 🟢 FIXED HERE: Explicitly sets security parameters to null for staff
     const { error: profileError } = await serviceClient.from("profiles").insert({
       user_id: newUser.user.id,
       business_id: businessId,
       username: staffUsername.trim().toLowerCase(),
       display_name: staffDisplayName,
       role: staffRole || "maker",
-      security_question: securityQuestion,
-      security_answer_hash: answerHash,
+      security_question: null,
+      security_answer_hash: null,
     });
+    
     if (profileError) {
       await serviceClient.auth.admin.deleteUser(newUser.user.id);
       return new Response(JSON.stringify({ error: "Profile creation failed: " + profileError.message }),
