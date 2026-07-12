@@ -1,35 +1,42 @@
-
 // ─── SUPABASE CONFIG ──────────────────────────────────────────
 // The anon key is safe to include here — it is designed to be
 // public. Supabase Row Level Security (RLS) is the real security
 // boundary, not keeping this key secret. The service_role key
 // (which bypasses RLS) lives only in Edge Functions, never here.
 const SUPABASE_URL  = 'https://iorzouwqhaygbylzifxf.supabase.co';
-// REPLACE THE LINE BELOW with your anon key from Supabase → Settings → API → anon public
-// It starts with eyJhbGci and is about 200 characters long
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlvcnpvdXdxaGF5Z2J5bHppZnhmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExNzcwNzQsImV4cCI6MjA5Njc1MzA3NH0.hG3Q4-mFWHYSulbpqt-ZAeGEt5fMFD-H7awA4loia-c';
 
 // Sanitize - strip any trailing /rest/v1 or /rest/v1/ that was accidentally
-// included in the URL. The Supabase JS client appends this itself; including
-// it twice causes every request to hit /rest/v1/rest/v1/... which returns 404.
+// included in the URL.
 const _cleanUrl = SUPABASE_URL.replace(/\/rest\/v1\/?$/, '').replace(/\/$/, '');
 
 let db = null, dbReady = false;
 
+// Global Users Array 
+let users = []; 
+
+// Locate your data loading function and ensure user_roles populates users:
+async function loadAppData() {
+  if (!dbReady || !db) return;
+  // 🟢 FIX: Replaced broken 'supabase' instance with your correct global 'db' instance
+  const { data: user_roles, error } = await db.from('user_roles').select('*');
+  if (!error && user_roles) {
+    users = user_roles; // Feeds the array that renderSetup().map is looking for
+    if (typeof renderSetup === 'function') renderSetup();      
+  }
+}
+
 // ─── ERROR LOGGER ─────────────────────────────────────────────
-// Central error handler so DB/network failures are always visible
-// in the UI (toast + console) instead of silently swallowed.
-// In production this can also POST to an error tracking service.
 function logError(context, error) {
   const msg = error?.message || error?.error_description || JSON.stringify(error) || 'Unknown error';
   console.error('[Mulika Biashara]', context, '→', msg, error);
-  showToast('⚠️ ' + context + ': ' + msg);
+  if (typeof showToast === 'function') showToast('⚠️ ' + context + ': ' + msg);
 }
 
 function initSupabase() {
   if (_cleanUrl.includes('YOUR_') || SUPABASE_ANON.includes('PASTE_') || SUPABASE_ANON.length < 100) {
     showDbBanner('offline');
-    console.warn('[Mulika Biashara] Supabase not configured — anon key missing or too short. Check app.js line 8.');
+    console.warn('[Mulika Biashara] Supabase not configured — anon key missing or too short.');
     return;
   }
   try {
@@ -37,11 +44,13 @@ function initSupabase() {
     dbReady = true;
     showDbBanner('online');
     syncFromSupabase();
+    loadAppData(); // Automatically pull users when the client initializes
   } catch(e) {
     showDbBanner('offline');
     logError('Supabase init failed', e);
   }
 }
+
 function showDbBanner(s) {
   const el = document.getElementById('db-status');
   if (!el) return;
@@ -49,179 +58,107 @@ function showDbBanner(s) {
   el.style.background = s === 'online' ? 'var(--green-light)' : 'var(--amber-light)';
   el.style.color = s === 'online' ? 'var(--green)' : 'var(--amber)';
 }
+
 async function syncFromSupabase() {
-  if (!dbReady) return;
+  if (!dbReady || !db) return;
   try {
-    const { data: dbP, error: pErr } = await db.from('products').select('*').eq('business_id',businessId).order('id'); if(pErr) logError('Load products',pErr);
-    if (dbP && dbP.length) { products = dbP.map(p=>({id:p.id,cat:p.category,name:p.name,price:p.price,icon:p.icon||'🔧'})); renderProducts(); renderSetup(); }
-    const today = new Date().toISOString().split('T')[0];
-    const { data: dbT, error: tErr } = await db.from('transactions').select('*').eq('business_id',businessId).order('created_at',{ascending:false}).limit(500); if(tErr) logError('Load transactions',tErr);
-    if (dbT && dbT.length) { transactions = dbT.map(t=>({id:t.id,time:new Date(t.created_at).toLocaleTimeString('en-KE',{hour:'2-digit',minute:'2-digit'}),timestamp:t.created_at,items:t.items,total:t.total,payment:t.payment_method,splits:t.splits||null,staff:t.staff_name,plate:t.plate_number||'',customerPhone:t.customer_phone||'',customerName:t.customer_name||'',isFreeWash:t.is_free_wash||false,isFullyFree:t.is_fully_free!==undefined?t.is_fully_free:(t.is_free_wash&&t.total===0)})); save(); }
-    const { data: dbC, error: cErr } = await db.from('customers').select('*').eq('business_id',businessId); if(cErr) logError('Load customers',cErr);
-    if (dbC && dbC.length) { customersByPlate = {}; dbC.forEach(c => customersByPlate[c.plate] = {name:c.name,phone:c.phone,visits:c.visits,freeWashAvailable:c.free_wash_available}); save(); }
-    const { data: dbBiz, error: bErr } = await db.from('businesses').select('*').eq('id',businessId).maybeSingle(); if(bErr) logError('Load business settings',bErr);
-    if (dbBiz) { businessName = dbBiz.name || businessName; businessLogo = dbBiz.logo || businessLogo; businessVertical = dbBiz.vertical || businessVertical; businessNameColor = dbBiz.name_color || businessNameColor; save(); renderNavBranding(); }
-  } catch(e) { console.error('Sync error:',e); }
+    const { data: dbP, error: pErr } = await db.from('products').select('*').eq('business_id',businessId).order('id'); 
+    if(pErr) logError('Load products',pErr);
+    if (dbP && dbP.length) { 
+      products = dbP.map(p=>({id:p.id,cat:p.category,name:p.name,price:p.price,icon:p.icon||'🚗'})); 
+      if (typeof renderProducts === 'function') renderProducts(); 
+      if (typeof renderSetup === 'function') renderSetup(); 
+    }
+    
+    const { data: dbT, error: tErr } = await db.from('transactions').select('*').eq('business_id',businessId).order('created_at',{ascending:false}).limit(500); 
+    if(tErr) logError('Load transactions',tErr);
+    if (dbT && dbT.length) { 
+      transactions = dbT.map(t=>({id:t.id,time:new Date(t.created_at).toLocaleTimeString('en-KE',{hour:'2-digit',minute:'2-digit'}),timestamp:t.created_at,items:t.items,total:t.total,payment:t.payment_method,splits:t.splits||null,staff:t.staff_name,plate:t.plate_number||'',customerPhone:t.customer_phone||'',customerName:t.customer_name||'',isFreeWash:t.is_free_wash||false,isFullyFree:t.is_fully_free!==undefined?t.is_fully_free:(t.is_free_wash&&t.total===0)})); 
+      if (typeof save === 'function') save(); 
+    }
+    
+    const { data: dbC, error: cErr } = await db.from('customers').select('*').eq('business_id',businessId); 
+    if(cErr) logError('Load customers',cErr);
+    if (dbC && dbC.length) { 
+      customersByPlate = {}; 
+      dbC.forEach(c => customersByPlate[c.plate] = {name:c.name,phone:c.phone,visits:c.visits,free_wash_available:c.free_wash_available}); 
+      if (typeof save === 'function') save(); 
+    }
+    
+    const { data: dbBiz, error: bErr } = await db.from('businesses').select('*').eq('id',businessId).maybeSingle(); 
+    if(bErr) logError('Load business settings',bErr);
+    if (dbBiz) { 
+      businessName = dbBiz.name || businessName; 
+      businessLogo = dbBiz.logo || businessLogo; 
+      businessVertical = dbBiz.vertical || businessVertical; 
+      businessNameColor = dbBiz.name_color || businessNameColor; 
+      if (typeof save === 'function') save(); 
+      if (typeof renderNavBranding === 'function') renderNavBranding(); 
+    }
+  } catch(e) { 
+    console.error('Sync error:', e); 
+  }
 }
+
 async function saveTransactionToDb(tx) {
-  if (!dbReady) return;
+  if (!dbReady || !db) return;
   try { const {error:e1} = await db.from('transactions').insert({id:tx.id,business_id:businessId,items:tx.items,total:tx.total,payment_method:tx.payment,splits:tx.splits||null,staff_name:tx.staff,plate_number:tx.plate||null,customer_phone:tx.customerPhone||null,customer_name:tx.customerName||null,is_free_wash:tx.isFreeWash||false,is_fully_free:tx.isFullyFree||false,discount_amount:tx.discountAmount||0,created_at:tx.timestamp}); if(e1) logError('Save transaction',e1); } catch(e) { logError('Save transaction',e); }
 }
 async function saveProductToDb(p) {
-  if (!dbReady) return;
+  if (!dbReady || !db) return;
   try { const {error:e2} = await db.from('products').upsert({id:p.id,business_id:businessId,name:p.name,price:p.price,category:p.cat,icon:p.icon}); if(e2) logError('Save product',e2); } catch(e) { logError('Save product',e); }
 }
 async function saveCustomerToDb(plate, c) {
-  if (!dbReady) return;
-  try { const {error:e3} = await db.from('customers').upsert({identifier_value:plate,business_id:businessId,name:c.name,phone:c.phone,visits:c.visits,free_wash_available:c.freeWashAvailable}); if(e3) logError('Save customer',e3); } catch(e) { logError('Save customer',e); }
+  if (!dbReady || !db) return;
+  try { const {error:e3} = await db.from('customers').upsert({id:plate,business_id:businessId,name:c.name,phone:c.phone,visits:c.visits,free_wash_available:c.freeWashAvailable}); if(e3) logError('Save customer',e3); } catch(e) { logError('Save customer',e); }
 }
 
 // ─── VERTICAL REGISTRY ────────────────────────────────────────
-// Each entry describes how this vertical tracks a customer/order within
-// the system. Changing the active vertical (via Setup) swaps these labels
-// and placeholder values across the entire POS, reports, and alerts -
-// no logic changes needed per vertical since all field names stay the same
-// ('plate' internally); only the user-facing text changes.
 const VERTICAL_REGISTRY = {
-  'car_wash': {
-    id:'car_wash', emoji:'🚗',
-    identifierLabel:'Plate number',
-    identifierPlaceholder:'e.g. KBZ 123A',
-    identifierInputStyle:'text-transform:uppercase',
-    identifierRequiredMsg:'Plate number is required',
-    identifierSearchHint:'Vehicle',
-    loyaltyNoun:'vehicle',        // "Vehicle KBZ 123A has a free wash"
-    loyaltyEntity:'wash',         // "Free wash earned"
-    serviceNoun:'wash',           // used in loyalty alert messages
-    identifierRequired:true,
-    approvalAutoLimit:500
-  },
-  'salon': {
-    id:'salon', emoji:'✂️',
-    identifierLabel:'Customer / Member ID',
-    identifierPlaceholder:'e.g. SLN-001 or name',
-    identifierInputStyle:'',
-    identifierRequiredMsg:'Customer or Member ID is required',
-    identifierSearchHint:'Customer',
-    loyaltyNoun:'customer',
-    loyaltyEntity:'service',
-    serviceNoun:'service',
-    identifierRequired:false,
-    approvalAutoLimit:300
-  },
-  'restaurant': {
-    id:'restaurant', emoji:'🍽️',
-    identifierLabel:'Table / Order number',
-    identifierPlaceholder:'e.g. T-12 or TAK-001',
-    identifierInputStyle:'',
-    identifierRequiredMsg:'Table or order number is required',
-    identifierSearchHint:'Table',
-    loyaltyNoun:'customer',
-    loyaltyEntity:'meal',
-    serviceNoun:'meal',
-    identifierRequired:false,
-    approvalAutoLimit:500
-  },
-  'retail': {
-    id:'retail', emoji:'🏪',
-    identifierLabel:'Customer / Loyalty ID',
-    identifierPlaceholder:'e.g. RET-0042',
-    identifierInputStyle:'',
-    identifierRequiredMsg:'Customer ID is required',
-    identifierSearchHint:'Customer',
-    loyaltyNoun:'customer',
-    loyaltyEntity:'purchase',
-    serviceNoun:'purchase',
-    identifierRequired:false,
-    approvalAutoLimit:1000
-  },
-  'pharmacy': {
-    id:'pharmacy', emoji:'💊',
-    identifierLabel:'Patient / Prescription ID',
-    identifierPlaceholder:'e.g. PAT-2025-001',
-    identifierInputStyle:'',
-    identifierRequiredMsg:'Patient ID is required',
-    identifierSearchHint:'Patient',
-    loyaltyNoun:'patient',
-    loyaltyEntity:'prescription',
-    serviceNoun:'prescription',
-    identifierRequired:false,
-    approvalAutoLimit:500
-  },
-  'laundry': {
-    id:'laundry', emoji:'👕',
-    identifierLabel:'Collection / Order tag',
-    identifierPlaceholder:'e.g. LND-0099',
-    identifierInputStyle:'',
-    identifierRequiredMsg:'Collection tag is required',
-    identifierSearchHint:'Order',
-    loyaltyNoun:'customer',
-    loyaltyEntity:'order',
-    serviceNoun:'order',
-    identifierRequired:false,
-    approvalAutoLimit:300
-  }
+  'car_wash': { id:'car_wash', emoji:'🚗', identifierLabel:'Plate number', identifierPlaceholder:'e.g. KBZ 123A', identifierInputStyle:'text-transform:uppercase', identifierRequiredMsg:'Plate number is required', identifierSearchHint:'Vehicle', loyaltyNoun:'vehicle', loyaltyEntity:'wash', serviceNoun:'wash', identifierRequired:true, approvalAutoLimit:500 },
+  'salon': { id:'salon', emoji:'✂️', identifierLabel:'Customer / Member ID', identifierPlaceholder:'e.g. SLN-001 or name', identifierInputStyle:'', identifierRequiredMsg:'Customer or Member ID is required', identifierSearchHint:'Customer', loyaltyNoun:'customer', loyaltyEntity:'service', serviceNoun:'service', identifierRequired:false, approvalAutoLimit:300 },
+  'restaurant': { id:'restaurant', emoji:'🍽️', identifierLabel:'Table / Order number', identifierPlaceholder:'e.g. T-12 or TAK-001', identifierInputStyle:'', identifierRequiredMsg:'Table or order number is required', identifierSearchHint:'Table', loyaltyNoun:'customer', loyaltyEntity:'meal', serviceNoun:'meal', identifierRequired:false, approvalAutoLimit:500 },
+  'retail': { id:'retail', emoji:'🏪', identifierLabel:'Customer / Loyalty ID', identifierPlaceholder:'e.g. RET-0042', identifierInputStyle:'', identifierRequiredMsg:'Customer ID is required', identifierSearchHint:'Customer', loyaltyNoun:'customer', loyaltyEntity:'purchase', serviceNoun:'purchase', identifierRequired:false, approvalAutoLimit:1000 },
+  'pharmacy': { id:'pharmacy', emoji:'💊', identifierLabel:'Patient / Prescription ID', identifierPlaceholder:'e.g. PAT-2025-001', identifierInputStyle:'', identifierRequiredMsg:'Patient ID is required', identifierSearchHint:'Patient', loyaltyNoun:'patient', loyaltyEntity:'prescription', serviceNoun:'prescription', identifierRequired:false, approvalAutoLimit:500 },
+  'laundry': { id:'laundry', emoji:'👕', identifierLabel:'Collection / Order tag', identifierPlaceholder:'e.g. LND-0099', identifierInputStyle:'', identifierRequiredMsg:'Collection tag is required', identifierSearchHint:'Order', loyaltyNoun:'customer', loyaltyEntity:'order', serviceNoun:'order', identifierRequired:false, approvalAutoLimit:300 }
 };
 
-// Maps the vertical select dropdown value (emoji string) to a registry key
-const VERTICAL_EMOJI_TO_KEY = {
-  '🚗':'car_wash', '✂️':'salon', '🍽️':'restaurant',
-  '🏪':'retail', '💊':'pharmacy', '👕':'laundry'
-};
+const VERTICAL_EMOJI_TO_KEY = { '🚗':'car_wash', '✂️':'salon', '🍽️':'restaurant', '🏪':'retail', '💊':'pharmacy', '👕':'laundry' };
 
 function getVerticalConfig() {
   const key = VERTICAL_EMOJI_TO_KEY[businessVertical] || 'car_wash';
   return VERTICAL_REGISTRY[key] || VERTICAL_REGISTRY['car_wash'];
 }
 
-// Apply the active vertical's labels across the POS form in real-time.
-// Called whenever the vertical is changed in Setup or on app entry.
 function applyVerticalLabels() {
   const vc = getVerticalConfig();
-  // POS identifier field label
   const lbl = document.getElementById('plate-field-label');
   if (lbl) lbl.innerHTML = vc.identifierLabel + (vc.identifierRequired ? ' <span class="req">*</span>' : ' <span style="font-size:10px;color:var(--text3)">(optional)</span>');
-  // Placeholder + input style
   const inp = document.getElementById('plate-num');
   if (inp) {
     inp.placeholder = vc.identifierPlaceholder;
     inp.style.textTransform = vc.identifierInputStyle.indexOf('uppercase') !== -1 ? 'uppercase' : '';
   }
-  // Inline error message
   const errEl = document.getElementById('plate-error');
   if (errEl) errEl.textContent = vc.identifierRequiredMsg;
-  // Loyalty setup description
   const loyaltyDesc = document.getElementById('loyalty-track-desc');
   if (loyaltyDesc) loyaltyDesc.textContent = 'Tracked by ' + vc.identifierLabel.toLowerCase();
-  // Update column headers in Sales and Credit reports
   const salesCol = document.getElementById('sales-identifier-col');
   if (salesCol) salesCol.textContent = vc.identifierLabel;
   const creditCol = document.getElementById('credit-identifier-col');
   if (creditCol) creditCol.textContent = vc.identifierLabel;
-  // Custom report field label for plate
-  if (typeof CUSTOM_REPORT_FIELDS !== 'undefined') {
-    const plateField = CUSTOM_REPORT_FIELDS.find(f => f.key === 'plate');
-    if (plateField) plateField.label = vc.identifierLabel;
-  }
 }
 
-
 // ─── RBAC: USERS ────────────────────────────────────────────────
-// Demo users. In production this table lives in Supabase with hashed
-// passwords; this is a working stub so the maker-checker flow is real today.
-// ─── ROLE PERMISSIONS ─────────────────────────────────────────
 const ROLE_PERMISSIONS = {
   maker:   ['pos','log','recon','alerts','setup','credit','myreturns'],
   checker: ['pos','log','recon','approvals','alerts','setup','credit']
 };
-let currentUser = null; // { id, username, name, role, businessId }
+let currentUser = null; 
 
 // ═══════════════════════════════════════════════════════════════
 // AUTH — PIN-BASED + SECURITY QUESTION RECOVERY
-// No email required, fully self-contained, no SMS gateway needed.
 // ═══════════════════════════════════════════════════════════════
-
-// ── Security questions offered at registration ─────────────────
 const SECURITY_QUESTIONS = [
   'What was the name of your first shop or business?',
   'What is your mother\'s home county or town?',
@@ -230,36 +167,19 @@ const SECURITY_QUESTIONS = [
   'What was your favourite subject in school?'
 ];
 
-// ── 1. PIN STRETCHING ──────────────────────────────────────────
-// Converts a short 4-digit PIN into a longer string that satisfies
-// Supabase Auth's minimum password length requirement.
-// The stretch formula includes a salt suffix so even if two users
-// share the same PIN (e.g. "1234"), their Supabase passwords differ
-// because their usernames differ.
-// IMPORTANT: Never change this formula after going live — existing
-// passwords cannot be recovered if the formula changes.
 function stretchPin(pin, username) {
   return pin + '_' + username.trim().toLowerCase() + '_mulika_secure_2025';
 }
 
-// ── 2. Username → masked email ─────────────────────────────────
-// Supabase Auth requires an email format. We mask the username into
-// one silently so users only ever type their plain username.
 function usernameToEmail(username) {
   return username.trim().toLowerCase().replace(/\s+/g, '.') + '@mulika.internal';
 }
 
-// ── 3. Answer hashing ─────────────────────────────────────────
-// Security question answers are hashed with SHA-256 before storage
-// so the raw answer is never persisted in the database — even a
-// database dump cannot reveal what someone answered.
 async function hashAnswer(answer) {
-  const normalized = answer.trim().toLowerCase(); // case-insensitive, trimmed
+  const normalized = answer.trim().toLowerCase();
   const encoded = new TextEncoder().encode(normalized);
   const hashBuffer = await crypto.subtle.digest('SHA-256', encoded);
-  return Array.from(new Uint8Array(hashBuffer))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('');
+  return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 // ── 4. LOGIN ───────────────────────────────────────────────────
@@ -268,20 +188,11 @@ async function attemptLogin() {
   const pin = document.getElementById('login-pin').value.trim();
   const errEl = document.getElementById('login-error');
   const btn = document.getElementById('login-btn');
-  errEl.classList.remove('show');
+  if (errEl) errEl.classList.remove('show');
 
-  if (!username || !pin) {
-    errEl.textContent = 'Username and PIN are required';
-    errEl.classList.add('show'); return;
-  }
-  if (!/^\d{4}$/.test(pin)) {
-    errEl.textContent = 'PIN must be exactly 4 digits';
-    errEl.classList.add('show'); return;
-  }
-  if (!db) {
-    errEl.textContent = 'Not connected to server. Check your internet.';
-    errEl.classList.add('show'); return;
-  }
+  if (!username || !pin) { if(errEl) { errEl.textContent = 'Username and PIN are required'; errEl.classList.add('show'); } return; }
+  if (!/^\d{4}$/.test(pin)) { if(errEl) { errEl.textContent = 'PIN must be exactly 4 digits'; errEl.classList.add('show'); } return; }
+  if (!db) { if(errEl) { errEl.textContent = 'Not connected to server. Check your internet.'; errEl.classList.add('show'); } return; }
 
   if (btn) { btn.disabled = true; btn.textContent = 'Signing in…'; }
   try {
@@ -294,47 +205,32 @@ async function attemptLogin() {
     });
 
     if (authError) {
-      errEl.textContent = 'Incorrect username or PIN';
-      errEl.classList.add('show');
-      logLoginEvent(username, false);
+      if(errEl) { errEl.textContent = 'Incorrect username or PIN'; errEl.classList.add('show'); }
+      if (typeof logLoginEvent === 'function') logLoginEvent(username, false);
       return;
     }
 
-    // Fetch role + business from profiles table
-    const { data: profile, error: profileError } = await db
-      .from('profiles')
-      .select('display_name, role, business_id')
-      .eq('user_id', authData.user.id)
-      .maybeSingle();
+    const { data: profile, error: profileError } = await db.from('profiles').select('display_name, role, business_id').eq('user_id', authData.user.id).maybeSingle();
 
     if (profileError || !profile) {
-      errEl.textContent = 'Account found but profile missing. Contact your administrator.';
-      errEl.classList.add('show');
+      if(errEl) { errEl.textContent = 'Account found but profile missing. Contact administrator.'; errEl.classList.add('show'); }
       await db.auth.signOut();
       return;
     }
 
     businessId = profile.business_id;
     localStorage.setItem('ib_business_id', businessId);
-    currentUser = {
-      id: authData.user.id,
-      username,
-      name: profile.display_name,
-      role: profile.role,
-      businessId: profile.business_id
-    };
-    logLoginEvent(username, true);
-    enterApp();
+    currentUser = { id: authData.user.id, username, name: profile.display_name, role: profile.role, businessId: profile.business_id };
+    if (typeof logLoginEvent === 'function') logLoginEvent(username, true);
+    if (typeof enterApp === 'function') enterApp();
   } catch(e) {
     logError('Login', e);
-    errEl.textContent = 'Login failed. Please try again.';
-    errEl.classList.add('show');
+    if(errEl) { errEl.textContent = 'Login failed. Please try again.'; errEl.classList.add('show'); }
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = 'Log in'; }
   }
 }
 
-// ── 5. PIN VISIBILITY TOGGLE (shared by login + recovery) ──────
 function togglePinVisibility(inputId, btnId) {
   const input = document.getElementById(inputId);
   const btn = document.getElementById(btnId);
@@ -344,22 +240,19 @@ function togglePinVisibility(inputId, btnId) {
   btn.textContent = show ? 'Hide' : 'Show';
 }
 
-// ── 6. RECOVERY — Step 1: Look up username ────────────────────
-let _recoveryProfile = null; // holds profile row during recovery flow
+// ── 6. RECOVERY ───────────────────────────────────────────────
+let _recoveryProfile = null; 
 
 function showRecovery() {
   document.getElementById('login-card').style.display = 'none';
   document.getElementById('recovery-card').style.display = 'block';
-  document.getElementById('recovery-error').classList.remove('show');
+  const errEl = document.getElementById('recovery-error');
+  if(errEl) errEl.classList.remove('show');
   document.getElementById('recovery-username').value = '';
-  document.getElementById('recovery-answer') && (document.getElementById('recovery-answer').value = '');
-  document.getElementById('recovery-new-pin') && (document.getElementById('recovery-new-pin').value = '');
-  document.getElementById('recovery-confirm-pin') && (document.getElementById('recovery-confirm-pin').value = '');
   document.getElementById('recovery-step-1').style.display = 'block';
   document.getElementById('recovery-step-2').style.display = 'none';
   document.getElementById('recovery-step-3').style.display = 'none';
   _recoveryProfile = null;
-  setRecoveryStep(1);
 }
 
 function hideRecovery() {
@@ -372,53 +265,32 @@ async function fetchSecurityQuestion() {
   const username = document.getElementById('recovery-username').value.trim();
   const errEl = document.getElementById('recovery-error');
   const btn = document.getElementById('recovery-step1-btn');
-  errEl.classList.remove('show');
+  if(errEl) errEl.classList.remove('show');
 
-  if (!username) {
-    errEl.textContent = 'Please enter your username';
-    errEl.classList.add('show'); return;
-  }
+  if (!username) { if(errEl) { errEl.textContent = 'Please enter your username'; errEl.classList.add('show'); } return; }
   if (btn) { btn.disabled = true; btn.textContent = 'Looking up…'; }
 
   try {
-    // We need the business_id to look up the profile.
-    // It is stored in localStorage from when the app was first set up.
     const storedBizId = localStorage.getItem('ib_business_id') || businessId;
     if (!storedBizId) {
-      errEl.textContent = 'Business not configured on this device. Log in from the device you normally use.';
-      errEl.classList.add('show'); return;
+      if(errEl) { errEl.textContent = 'Business not configured on this device.'; errEl.classList.add('show'); } 
+      return;
     }
 
-    // Use the anon-accessible RPC — the user is not authenticated yet
-    const { data, error } = await db.rpc('get_profile_for_recovery', {
-      p_username: username.toLowerCase().trim(),
-      p_business_id: storedBizId
-    });
-
+    const { data, error } = await db.rpc('get_profile_for_recovery', { p_username: username.toLowerCase().trim(), p_business_id: storedBizId });
     if (error) { logError('Recovery lookup', error); return; }
+    
     const profile = data && data[0];
     if (!profile || !profile.security_question) {
-      errEl.textContent = 'Username not found. Check your spelling.';
-      errEl.classList.add('show'); return;
+      if(errEl) { errEl.textContent = 'Username not found. Check spelling.'; errEl.classList.add('show'); } 
+      return;
     }
 
-    // Cache the profile for steps 2 and 3 — nothing sensitive
-    // is stored here that isn't already in the DB response
-    _recoveryProfile = {
-      user_id: profile.user_id,
-      display_name: profile.display_name,
-      role: profile.role,
-      security_question: profile.security_question,
-      security_answer_hash: profile.security_answer_hash,
-      business_id: storedBizId,
-      username: username.toLowerCase().trim()
-    };
+    _recoveryProfile = { user_id: profile.user_id, display_name: profile.display_name, role: profile.role, security_question: profile.security_question, security_answer_hash: profile.security_answer_hash, business_id: storedBizId, username: username.toLowerCase().trim() };
 
     document.getElementById('recovery-question-display').textContent = profile.security_question;
     document.getElementById('recovery-step-1').style.display = 'none';
     document.getElementById('recovery-step-2').style.display = 'block';
-    setRecoveryStep(2);
-    setTimeout(() => document.getElementById('recovery-answer').focus(), 100);
   } catch(e) {
     logError('Recovery', e);
   } finally {
@@ -426,38 +298,25 @@ async function fetchSecurityQuestion() {
   }
 }
 
-// ── 7. RECOVERY — Step 2: Verify security answer ──────────────
 async function verifySecurityAnswer() {
   const answer = document.getElementById('recovery-answer').value;
   const errEl = document.getElementById('recovery-error');
   const btn = document.getElementById('recovery-step2-btn');
-  errEl.classList.remove('show');
+  if(errEl) errEl.classList.remove('show');
 
-  if (!answer.trim()) {
-    errEl.textContent = 'Please type your answer';
-    errEl.classList.add('show'); return;
-  }
-  if (!_recoveryProfile) {
-    errEl.textContent = 'Session expired. Please start again.';
-    errEl.classList.add('show');
-    showRecovery(); return;
-  }
+  if (!answer.trim()) { if(errEl) { errEl.textContent = 'Please type your answer'; errEl.classList.add('show'); } return; }
+  if (!_recoveryProfile) { showRecovery(); return; }
 
   if (btn) { btn.disabled = true; btn.textContent = 'Verifying…'; }
   try {
     const inputHash = await hashAnswer(answer);
-    // Constant-time string comparison to prevent timing attacks
     if (inputHash !== _recoveryProfile.security_answer_hash) {
-      errEl.textContent = 'Incorrect answer. Please try again.';
-      errEl.classList.add('show');
+      if(errEl) { errEl.textContent = 'Incorrect answer. Please try again.'; errEl.classList.add('show'); }
       document.getElementById('recovery-answer').value = '';
       return;
     }
-    // Answer correct — unlock step 3
     document.getElementById('recovery-step-2').style.display = 'none';
     document.getElementById('recovery-step-3').style.display = 'block';
-    setRecoveryStep(3);
-    setTimeout(() => document.getElementById('recovery-new-pin').focus(), 100);
   } catch(e) {
     logError('Answer verification', e);
   } finally {
@@ -465,81 +324,38 @@ async function verifySecurityAnswer() {
   }
 }
 
-// ── 8. RECOVERY — Step 3: Save new PIN and log in ────────────
 async function submitNewPin() {
   const newPin = document.getElementById('recovery-new-pin').value.trim();
   const confirmPin = document.getElementById('recovery-confirm-pin').value.trim();
   const errEl = document.getElementById('recovery-error');
   const btn = document.getElementById('recovery-step3-btn');
-  errEl.classList.remove('show');
+  if(errEl) errEl.classList.remove('show');
 
-  if (!newPin || !confirmPin) {
-    errEl.textContent = 'Please enter and confirm your new PIN';
-    errEl.classList.add('show'); return;
-  }
-  if (!/^\d{4}$/.test(newPin)) {
-    errEl.textContent = 'PIN must be exactly 4 digits';
-    errEl.classList.add('show'); return;
-  }
-  if (newPin !== confirmPin) {
-    errEl.textContent = 'PINs do not match';
-    errEl.classList.add('show');
-    document.getElementById('recovery-confirm-pin').value = '';
-    return;
-  }
-  if (!_recoveryProfile) {
-    errEl.textContent = 'Session expired. Please start again.';
-    errEl.classList.add('show');
-    showRecovery(); return;
-  }
+  if (!newPin || !confirmPin) { if(errEl) { errEl.textContent = 'Please enter and confirm your PIN'; errEl.classList.add('show'); } return; }
+  if (!/^\d{4}$/.test(newPin)) { if(errEl) { errEl.textContent = 'PIN must be 4 digits'; errEl.classList.add('show'); } return; }
+  if (newPin !== confirmPin) { if(errEl) { errEl.textContent = 'PINs do not match'; errEl.classList.add('show'); } return; }
 
   if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
   try {
     const newStretched = stretchPin(newPin, _recoveryProfile.username);
-
-    // Pass the stored answer hash to the RPC so it can re-verify
-    // server-side — the server never trusts the client alone
-    const { data: rpcResult, error: rpcError } = await db.rpc('reset_user_pin', {
-      p_user_id: _recoveryProfile.user_id,
-      p_new_stretched_password: newStretched,
-      p_answer_hash: _recoveryProfile.security_answer_hash
-    });
+    const { data: rpcResult, error: rpcError } = await db.rpc('reset_user_pin', { p_user_id: _recoveryProfile.user_id, p_new_stretched_password: newStretched, p_answer_hash: _recoveryProfile.security_answer_hash });
 
     if (rpcError || (rpcResult && !rpcResult.success)) {
-      const msg = rpcError?.message || (rpcResult && rpcResult.error) || 'PIN reset failed';
-      logError('PIN reset', { message: msg });
-      errEl.textContent = msg;
-      errEl.classList.add('show'); return;
-    }
-
-    showToast('✅ PIN updated. Logging you in…');
-
-    // Auto-login with the new PIN immediately
-    const maskedEmail = usernameToEmail(_recoveryProfile.username);
-    const { data: authData, error: authError } = await db.auth.signInWithPassword({
-      email: maskedEmail,
-      password: newStretched
-    });
-
-    if (authError) {
-      // PIN was saved — just ask them to log in manually
-      showToast('PIN saved. Please log in with your new PIN.');
-      hideRecovery();
+      if(errEl) { errEl.textContent = rpcError?.message || 'PIN reset failed'; errEl.classList.add('show'); } 
       return;
     }
 
+    const maskedEmail = usernameToEmail(_recoveryProfile.username);
+    const { data: authData, error: authError } = await db.auth.signInWithPassword({ email: maskedEmail, password: newStretched });
+
+    if (authError) { hideRecovery(); return; }
+
     businessId = _recoveryProfile.business_id;
     localStorage.setItem('ib_business_id', businessId);
-    currentUser = {
-      id: authData.user.id,
-      username: _recoveryProfile.username,
-      name: _recoveryProfile.display_name,
-      role: _recoveryProfile.role,
-      businessId: _recoveryProfile.business_id
-    };
+    currentUser = { id: authData.user.id, username: _recoveryProfile.username, name: _recoveryProfile.display_name, role: _recoveryProfile.role, businessId: _recoveryProfile.business_id };
     _recoveryProfile = null;
     hideRecovery();
-    enterApp();
+    if (typeof enterApp === 'function') enterApp();
   } catch(e) {
     logError('PIN reset', e);
   } finally {
@@ -547,30 +363,29 @@ async function submitNewPin() {
   }
 }
 
-// ── 9. LOGOUT ─────────────────────────────────────────────────
 async function logout() {
   try { if (db) await db.auth.signOut(); } catch(e) {}
-  currentUser = null;
-  businessId = '';
-  _recoveryProfile = null;
+  currentUser = null; businessId = ''; _recoveryProfile = null;
   document.getElementById('app-root').style.display = 'none';
   document.getElementById('login-screen').style.display = 'flex';
-  document.getElementById('login-username').value = '';
-  document.getElementById('login-pin').value = '';
 }
 
-// ── 10. SIGN UP (new business registration) ───────────────────
+// ── 10. SIGN UP (New business onboarding with tracking telemetry) ───
 function showSignUp() {
   document.getElementById('login-card').style.display = 'none';
   document.getElementById('signup-card').style.display = 'block';
-  document.getElementById('signup-error').classList.remove('show');
+  const errEl = document.getElementById('signup-error');
+  if (errEl) errEl.style.display = 'none';
 }
+
 function hideSignUp() {
   document.getElementById('signup-card').style.display = 'none';
   document.getElementById('login-card').style.display = 'block';
 }
 
 async function submitSignUp() {
+  console.log("[Onboarding Telemetry] Submission triggered.");
+  
   const bizName   = document.getElementById('signup-biz-name').value.trim();
   const vertical  = document.getElementById('signup-vertical').value;
   const dispName  = document.getElementById('signup-display-name').value.trim();
@@ -580,31 +395,34 @@ async function submitSignUp() {
   const answer    = document.getElementById('signup-security-answer').value.trim();
   const errEl     = document.getElementById('signup-error');
   const btn       = document.getElementById('signup-btn');
-  errEl.classList.remove('show');
+  
+  if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
 
   if (!bizName || !dispName || !username || !pin || !question || !answer) {
-    errEl.textContent = 'Please fill in all fields';
-    errEl.classList.add('show'); return;
+    if (errEl) { errEl.textContent = 'Please fill in all fields'; errEl.style.display = 'block'; } 
+    return;
   }
   if (!/^\d{4}$/.test(pin)) {
-    errEl.textContent = 'PIN must be exactly 4 digits';
-    errEl.classList.add('show'); return;
+    if (errEl) { errEl.textContent = 'PIN must be exactly 4 digits'; errEl.style.display = 'block'; } 
+    return;
   }
   if (!question) {
-    errEl.textContent = 'Please choose a security question';
-    errEl.classList.add('show'); return;
+    if (errEl) { errEl.textContent = 'Please choose a security question'; errEl.style.display = 'block'; } 
+    return;
   }
-  if (!db) {
-    errEl.textContent = 'Not connected to server. Check your internet connection.';
-    errEl.classList.add('show'); return;
+
+  // Verification point: Check config status using token references
+  if (!SUPABASE_ANON || SUPABASE_ANON.length < 100) {
+    if (errEl) { errEl.textContent = 'Configuration Error: Valid API Client key missing.'; errEl.style.display = 'block'; }
+    return;
   }
 
   if (btn) { btn.disabled = true; btn.textContent = 'Creating account…'; }
+  
   try {
-    // Build Edge Function URL from the clean Supabase project URL
     const fnUrl = _cleanUrl + '/functions/v1/onboard-business';
+    console.log("[Onboarding Telemetry] Attempting to dispatch payload to URL:", fnUrl);
 
-    // 15-second timeout so button never freezes permanently
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15000);
 
@@ -617,19 +435,23 @@ async function submitSignUp() {
           'Authorization': 'Bearer ' + SUPABASE_ANON
         },
         body: JSON.stringify({
-          businessName: bizName, vertical,
-          ownerUsername: username, ownerDisplayName: dispName, ownerPin: pin,
-          securityQuestion: question, securityAnswer: answer
+          businessName: bizName, 
+          vertical: vertical,
+          ownerUsername: username, 
+          ownerDisplayName: dispName, 
+          ownerPin: pin,
+          securityQuestion: question, 
+          securityAnswer: answer
         }),
         signal: controller.signal
       });
     } catch(fetchErr) {
-      if (fetchErr.name === 'AbortError') {
-        errEl.textContent = 'Request timed out. The server may not be ready yet — please try again in 30 seconds.';
-      } else {
-        errEl.textContent = 'Could not reach the server. Check your internet connection.';
+      console.error("[Onboarding Telemetry] Network Fetch Fault:", fetchErr);
+      if (errEl) {
+        errEl.textContent = fetchErr.name === 'AbortError' ? 'Request timed out. Please try again.' : 'Could not reach server. Check internet connection.';
+        errEl.style.display = 'block';
       }
-      errEl.classList.add('show'); return;
+      return;
     } finally {
       clearTimeout(timeout);
     }
@@ -637,31 +459,29 @@ async function submitSignUp() {
     let result;
     try {
       result = await response.json();
+      console.log("[Onboarding Telemetry] Server parsed payload returned:", result);
     } catch(e) {
-      errEl.textContent = 'Unexpected response from server (status ' + response.status + '). Try again.';
-      errEl.classList.add('show'); return;
+      console.error("[Onboarding Telemetry] JSON Parse Fault:", e);
+      if (errEl) { errEl.textContent = 'Unexpected response structure from server (status ' + response.status + ').'; errEl.style.display = 'block'; }
+      return;
     }
 
     if (!response.ok || !result.success) {
-      // Show the exact error from the Edge Function so you can diagnose it
-      errEl.textContent = result.error || ('Server error ' + response.status + '. Check Edge Functions are deployed.');
-      errEl.classList.add('show'); return;
+      if (errEl) { errEl.textContent = result.error || ('Server error ' + response.status); errEl.style.display = 'block'; }
+      return;
     }
 
-    // Store business ID immediately
     businessId = result.businessId;
     localStorage.setItem('ib_business_id', businessId);
 
-    showToast('✅ Account created! Logging you in…');
-    // Pre-fill login fields and attempt login
+    if (typeof showToast === 'function') showToast('✅ Account created! Logging you in…');
     document.getElementById('login-username').value = username;
     document.getElementById('login-pin').value = pin;
     hideSignUp();
     await attemptLogin();
   } catch(e) {
-    logError('Sign up', e);
-    errEl.textContent = 'Something went wrong: ' + (e.message || 'unknown error');
-    errEl.classList.add('show');
+    console.error("[Onboarding Telemetry] Critical System Exception caught:", e);
+    if (errEl) { errEl.textContent = 'Something went wrong: ' + (e.message || 'unknown error'); errEl.style.display = 'block'; }
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = 'Create account'; }
   }
