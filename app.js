@@ -156,6 +156,90 @@ const ROLE_PERMISSIONS = {
 };
 let currentUser = null; 
 
+// ─── NEW USERS ────────────────────────────────────────────────
+async function saveNewUser() {
+  const name     = document.getElementById('uf-name').value.trim();
+  const username = document.getElementById('uf-username').value.trim().toLowerCase();
+  const pin      = document.getElementById('uf-password').value.trim(); 
+  const role     = document.getElementById('uf-role').value;
+  const btn      = document.querySelector('#user-modal-btn') || document.querySelector('.modal-footer .btn-primary');
+  
+  const errEl = document.getElementById('signup-error') || document.getElementById('login-error');
+
+  if (!name || !username || !pin) { 
+    if (typeof showToast === 'function') showToast('⚠️ Please fill in all fields'); 
+    return; 
+  }
+  if (!/^\d{4}$/.test(pin)) {
+    if (typeof showToast === 'function') showToast('⚠️ PIN must be exactly 4 digits');
+    return;
+  }
+
+  // 1. Change button UI to show it's working
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Creating...';
+  }
+   try { 
+  // 2. Insert directly from DB Edge Function
+    const { data, error } = await db.functions.invoke('add-staff-member', {
+  body: { 
+    name: name, 
+    username: username, 
+    pin: pin, 
+    role: role,
+    business_id: businessId 
+  }
+});
+
+    // 3. Handle explicit Database errors (like duplicate usernames)
+  if (error) {
+      console.error("[Edge Function Error]", error);
+      showToast('❌ Failed to add staff: ' + (error.message || 'Server Error'));
+      return;
+    }
+
+    // 4. If successful, update local arrays safely
+    if (data && data[0]) {
+      const newUser = data[0];
+      
+      // Ensure the object has both name and display_name so no other UI functions break
+      newUser.name = newUser.display_name; 
+      
+      if (!Array.isArray(users)) users = [];
+      users.push(newUser);
+      
+      if (typeof showToast === 'function') showToast('✅ Staff member added successfully!');
+      
+      // 5. Safely clean up fields and close windows
+      document.getElementById('uf-name').value = '';
+      document.getElementById('uf-username').value = '';
+      document.getElementById('uf-password').value = '';
+      
+      if (typeof closeUserModal === 'function') {
+        closeUserModal();
+      } else {
+        // Fallback if modal function is missing: manually hide the element
+        const modal = document.getElementById('user-modal');
+        if (modal) modal.style.display = 'none';
+      }
+      
+      // 6. Refresh lists
+      if (typeof loadAppData === 'function') await loadAppData();
+      if (typeof renderSetup === 'function') renderSetup();
+    }
+  } catch (e) {
+    console.error("[System Exception Framework]", e);
+    if (typeof showToast === 'function') showToast('❌ A system error occurred.');
+  } finally {
+    // 7. Always restore button state
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Create account';
+    }
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════
 // AUTH — PIN-BASED + SECURITY QUESTION RECOVERY
 // ═══════════════════════════════════════════════════════════════
@@ -238,6 +322,30 @@ function togglePinVisibility(inputId, btnId) {
   const show = input.type === 'password';
   input.type = show ? 'text' : 'password';
   btn.textContent = show ? 'Hide' : 'Show';
+}
+
+// ── 5. Read Isolated Profiles ───────────────────────────────────────────────
+//Change your data initialization logic to fetch straight from profiles instead of user_roles,
+//filtering by the active business ID so that businesses only ever see their own staff members:
+
+async function loadAppData() {
+  if (!dbReady || !db || !businessId) return;
+
+  // 🟢 FIX: Query the profiles table and isolate results by businessId
+  const { data: profileRows, error } = await db
+    .from('profiles')
+    .select('*')
+    .eq('business_id', businessId);
+
+  if (error) {
+    console.error("Error loading isolated staff profiles:", error);
+    return;
+  }
+
+  if (profileRows) {
+    users = profileRows; // Populates your users array cleanly
+    if (typeof renderSetup === 'function') renderSetup();      
+  }
 }
 
 // ── 6. RECOVERY ───────────────────────────────────────────────
@@ -368,6 +476,33 @@ async function logout() {
   currentUser = null; businessId = ''; _recoveryProfile = null;
   document.getElementById('app-root').style.display = 'none';
   document.getElementById('login-screen').style.display = 'flex';
+}
+
+// ── 10. DELETION──
+async function removeUser(i) {
+  if (users[i].username === currentUser.username) { 
+    showToast('⚠️ You cannot remove your own account while logged in'); 
+    return; 
+  }
+
+  const removedUser = users[i];
+
+  // 🟢 FIX: Target 'profiles' table using the distinct username
+  const { error } = await db
+    .from('profiles')
+    .delete()
+    .eq('username', removedUser.username)
+    .eq('business_id', businessId); // Extra security check to ensure they belong to this business
+
+  if (error) {
+    console.error("Failed to delete user from profiles:", error);
+    showToast('❌ Database Error: Could not remove staff member');
+    return;
+  }
+
+  users.splice(i, 1);
+  if (typeof renderSetup === 'function') renderSetup(); 
+  showToast('🗑 Removed ' + removedUser.name + ' from live database');
 }
 
 // ── 10. SIGN UP (New business onboarding with tracking telemetry) ───
