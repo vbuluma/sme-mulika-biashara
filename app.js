@@ -59,7 +59,9 @@ function initSupabase() {
     dbReady = true;
     showDbBanner('online');
     syncFromSupabase();
-    loadAppData(); // Automatically pull users when the client initializes
+    loadAppData(); 
+    // Kickstart cloud sync engine to load dynamic products and staff arrays
+    loadAppDataFromSupabase();
   } catch(e) {
     showDbBanner('offline');
     logError('Supabase init failed', e);
@@ -202,8 +204,13 @@ async function saveNewUser() {
   }
 
   try { 
-    // 2. Invoke Edge Function with the EXACT parameters it expects
+    // Grab the logged-in user's authentication session token to authorize the action
+    const { data: sessionData } = await db.auth.getSession();
+    const token = sessionData?.session?.access_token;
+
+    // 2. Invoke Edge Function passing authorization headers
     const { data, error } = await db.functions.invoke('add-staff-member', {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: { 
         businessId: activeBusinessId, 
         staffUsername: username, 
@@ -362,7 +369,6 @@ function togglePinVisibility(inputId, btnId) {
 async function loadAppData() {
   if (!dbReady || !db || !businessId) return;
 
-  // 🟢 FIX: Query the profiles table and isolate results by businessId
   const { data: profileRows, error } = await db
     .from('profiles')
     .select('*')
@@ -374,7 +380,11 @@ async function loadAppData() {
   }
 
   if (profileRows) {
-    users = profileRows; // Populates your users array cleanly
+    // Standardize mapping format so name text properties resolve properly across dashboards
+    users = profileRows.map(u => ({
+      ...u,
+      name: u.display_name || u.name
+    }));
     if (typeof renderSetup === 'function') renderSetup();      
   }
 }
@@ -927,12 +937,10 @@ try {
   const scc = localStorage.getItem('ib_case_counter'); if(scc) caseIdCounter = parseInt(scc)||0;
 } catch(e){}
 
+ // products and staff saved arrays removed to use live database updates
 function save() {
   try {
-    function save() {
-  try {
     localStorage.setItem('ib_transactions', JSON.stringify(transactions));
-    // products and staff saved arrays removed to use live database updates
     localStorage.setItem('ib_pending', JSON.stringify(pendingRequests));
     localStorage.setItem('ib_history', JSON.stringify(requestHistory));
     localStorage.setItem('ib_audit', JSON.stringify(auditLog));
